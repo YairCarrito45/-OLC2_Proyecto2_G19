@@ -1,0 +1,87 @@
+<programa> ::= <declaraciones>* <EOF>
+
+<declaraciones> ::= <varDcl> | <structDecl> | <stmt>
+
+<varDcl> ::= "mut" <ID> <tipo>? (<asign_op> <expresion>)?
+
+<asign_op> ::= "=" | ":="
+
+<structDecl> ::= "struct" <ID> "{" <atributos> "}"
+
+<atributos> ::= <atributo> <atributo>*
+<atributo> ::= <tipo> <ID> ";"
+
+<inicializadorStruct> ::= <inicializadorCampo> ("," <inicializadorCampo>)*
+<inicializadorCampo> ::= <ID> ":" <expresion>
+
+<tipo> ::= <sliceTipo> | "int" | "float64" | "string" | "bool" | "char"
+<sliceTipo> ::= "[" "]" <tipo>
+
+<stmt> ::= <expresion>
+         | "print" "(" <parametros>? ")"
+         | "break"
+         | "continue"
+         | "return" <expresion>?
+         | <sentencias_control>
+         | <bloque>
+         | <asignacion_slice_doble>
+
+<asignacion_slice_doble> ::= <ID> "[" <expresion> "]" "[" <expresion> "]" "=" <expresion>
+
+<sentencias_control> ::= <ifDcl> | <forDcl> | <whileDcl> | <switchDcl>
+
+<ifDcl> ::= "if" "("? <expresion> ")"? <bloque> <elseifDcl>* <elseDcl>?
+<elseifDcl> ::= "else" "if" "("? <expresion> ")"? <bloque>
+<elseDcl> ::= "else" <bloque>
+
+<switchDcl> ::= "switch" <expresion> "{" <caseBlock>* <defaultBlock>? "}"
+<caseBlock> ::= "case" <expresion> ":" <declaraciones>*
+<defaultBlock> ::= "default" ":" <declaraciones>*
+
+<forDcl> ::= "for" <expresion> <bloque>
+           | "for" <expresion> ";" <expresion> ";" <expresion> <bloque>
+           | "for" <ID> "," <ID> "in" <ID> <bloque>
+
+<whileDcl> ::= "while" "("? <expresion> ")"? <bloque>
+
+<bloque> ::= "{" <declaraciones>* "}"
+
+<expresion> ::= <ID> "+=" <expresion>
+              | <ID> "-=" <expresion>
+              | <ID> "=" <expresion>
+              | <ID> "++"
+              | <ID> "--"
+              | <ID> "." <expresion>
+              | <ID> "." <ID>
+              | <expresion> <mulop> <expresion>
+              | <expresion> <sumop> <expresion>
+              | <expresion> <relop> <expresion>
+              | <expresion> <eqop> <expresion>
+              | <expresion> "&&" <expresion>
+              | <expresion> "||" <expresion>
+              | <unop> <expresion>
+              | "(" <expresion> ")"
+              | <valor>
+              | <ID>
+              | "[" "]" <tipo> "{" <parametros>? "}"
+              | "indexOf" "(" <expresion> "," <expresion> ")"
+              | "join" "(" <expresion> "," <expresion> ")"
+              | "len" "(" <expresion> ")"
+
+<parametros> ::= <expresion> ("," <expresion>)*
+
+<valor> ::= <ENTERO> | <DECIMAL> | <CADENA> | <BOOLEANO> | <CARACTER>
+
+<mulop> ::= "*" | "/" | "%"
+<sumop> ::= "+" | "-"
+<relop> ::= "<" | "<=" | ">=" | ">"
+<eqop>  ::= "==" | "!="
+<unop>  ::= "!" | "-"
+
+<ID> ::= [a-zA-Z_][a-zA-Z0-9_]*
+
+<ENTERO> ::= [0-9]+
+<DECIMAL> ::= [0-9]+ "." [0-9]+
+<CADENA> ::= '"' ... '"'         (* cadena entre comillas dobles *)
+<BOOLEANO> ::= "true" | "false"
+<CARACTER> ::= '\'' . '\''

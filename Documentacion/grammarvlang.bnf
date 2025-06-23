@@ -1,0 +1,105 @@
+<programa> ::= <declaraciones>* EOF
+
+<declaraciones> ::= <varDcl>
+                  | <structDecl>
+                  | <funcionStruct>
+                  | <stmt>
+
+<structDecl> ::= "struct" ID "{" <atributos> "}"
+
+<atributos> ::= <atributo> <atributo>*
+
+<atributo> ::= <tipo> ID ";"
+
+<inicializadorStruct> ::= <inicializadorCampo> ("," <inicializadorCampo>)*
+
+<inicializadorCampo> ::= ID ":" <expresion>
+
+<funcionStruct> ::= "func" "(" ID "*" ? ID ")" ID "(" <parametrosFormales>? ")" <bloque>
+
+<parametrosFormales> ::= <parametroFormal> ("," <parametroFormal>)*
+
+<parametroFormal> ::= <tipo> ID
+
+<varDcl> ::= "mut" ID <tipo>? (("=" | ":=") <expresion>)?
+
+<tipo> ::= <sliceTipo>
+         | "int"
+         | "float64"
+         | "string"
+         | "bool"
+         | "char"
+
+<sliceTipo> ::= "[" "]" <tipo>
+
+<stmt> ::= <expresion>
+         | ID "[" <expresion> "]" "[" <expresion> "]" "=" <expresion>
+         | "print" "(" <parametros>? ")"
+         | "break"
+         | "continue"
+         | "return" <expresion>?
+         | <sentencias_control>
+         | <bloque>
+
+<sentencias_control> ::= <ifDcl>
+                       | <forDcl>
+                       | <whileDcl>
+                       | <switchDcl>
+
+<ifDcl> ::= "if" "("? <expresion> ")"? <bloque> <elseifDcl>* <elseDcl>?
+
+<elseifDcl> ::= "else" "if" "("? <expresion> ")"? <bloque>
+
+<elseDcl> ::= "else" <bloque>
+
+<switchDcl> ::= "switch" <expresion> "{" <caseBlock>* <defaultBlock>? "}"
+
+<caseBlock> ::= "case" <expresion> ":" <declaraciones>*
+
+<defaultBlock> ::= "default" ":" <declaraciones>*
+
+<forDcl> ::= "for" <expresion> <bloque>
+           | "for" <expresion> ";" <expresion> ";" <expresion> <bloque>
+           | "for" ID "," ID "in" ID <bloque>
+
+<whileDcl> ::= "while" "("? <expresion> ")"? <bloque>
+
+<bloque> ::= "{" <declaraciones>* "}"
+
+<expresion> ::= ID "+=" <expresion>
+              | ID "-=" <expresion>
+              | ID "=" <expresion>
+              | ID "++"
+              | ID "--"
+              | ID "." ID "=" <expresion>
+              | ID "." ID
+              | ID "." ID "(" <parametros>? ")"
+              | ID "{" <inicializadorStruct>? "}"
+              | <expresion> ("*" | "/" | "%") <expresion>
+              | <expresion> ("+" | "-") <expresion>
+              | <expresion> ("<" | "<=" | ">=" | ">") <expresion>
+              | <expresion> ("==" | "!=") <expresion>
+              | <expresion> "&&" <expresion>
+              | <expresion> "||" <expresion>
+              | ("!" | "-") <expresion>
+              | "(" <expresion> ")"
+              | <valor>
+              | ID
+              | "{" <parametros>? "}"
+              | "[" "]" <tipo> "{" <parametros>? "}"
+              | "indexOf" "(" <expresion> "," <expresion> ")"
+              | "join" "(" <expresion> "," <expresion> ")"
+              | "len" "(" <expresion> ")"
+              | "append" "(" <expresion> "," <expresion> ")"
+              | ID "[" <expresion> "]"
+              | ID "[" <expresion> "]" "=" <expresion>
+              | ID "[" <expresion> "]" "[" <expresion> "]"
+              | ID "[" <expresion> "]" "[" <expresion> "]" "=" <expresion>
+
+<parametros> ::= <expresion> ("," <expresion>)*
+
+<valor> ::= <ENTERO>
+          | <DECIMAL>
+          | <CADENA>
+          | <BOOLEANO>
+          | <CARACTER>
