@@ -1,7 +1,5 @@
 package main
 
-
-
 import (
 	"fmt"
 	"os"
@@ -11,14 +9,13 @@ import (
 
 	"compiler/cst"
 	"compiler/errors"
-	// "main/repl"
-
+	"compiler/arm"
 	"github.com/antlr4-go/antlr/v4"
-	"compiler/Frontend" 
+	"compiler/Frontend"
 )
 
 func main() {
-	// Mostrar interfaz web (si aplica)
+	// Mostrar interfaz gráfica (opcional)
 	Frontend.MostrarIDE()
 
 	// Leer código fuente desde stdin
@@ -29,29 +26,30 @@ func main() {
 		return
 	}
 
-	// Canal paralelo para CST (opcional)
-	resultChannel := make(chan string)
+	// Iniciar generación del CST en paralelo (opcional)
+	cstOutput := make(chan string)
+
 	go func() {
-		resultChannel <- cst.CstReport(inputCode)
+		cstOutput <- cst.CstReport(inputCode)
 	}()
 
 	// === Análisis léxico ===
 	input := antlr.NewInputStream(inputCode)
 	lexer := compiler.NewVlangLexer(input)
 
-	// Crear listener de errores léxicos
+	// Escuchar errores léxicos
 	lexicalErrorListener := errors.NewLexicalErrorListener()
 	lexer.RemoveErrorListeners()
 	lexer.AddErrorListener(lexicalErrorListener)
 
-	// === Tokens ===
+	// Tokenizar
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 
 	// === Parser ===
 	parser := compiler.NewVlangParser(stream)
 	parser.BuildParseTrees = true
 
-	// Listener y estrategia personalizada de errores sintácticos
+	// Escuchar errores sintácticos
 	syntaxErrorListener := errors.NewSyntaxErrorListener(lexicalErrorListener.ErrorTable)
 	parser.RemoveErrorListeners()
 	parser.SetErrorHandler(errors.NewCustomErrorStrategy())
@@ -60,14 +58,12 @@ func main() {
 	// Parsear el árbol desde el axioma principal
 	tree := parser.Programa()
 
-	// === Crear consola y visitor ===
+	// === Crear consola y visitor REPL ===
 	console := repl.NewConsole()
 	visitor := repl.NewReplVisitor(console)
-
-	// Visitar árbol
 	visitor.Visit(tree)
 
-	// === Mostrar errores léxicos ===
+	// === Validar errores antes de traducir ===
 	if len(lexicalErrorListener.ErrorTable.Errors) > 0 {
 		fmt.Println("🛑 Errores léxicos:")
 		for _, err := range lexicalErrorListener.ErrorTable.Errors {
@@ -76,7 +72,6 @@ func main() {
 		return
 	}
 
-	// === Mostrar errores sintácticos/semánticos ===
 	if len(visitor.ErrorTable.Errors) > 0 {
 		fmt.Println("🛑 Errores sintácticos o semánticos:")
 		for _, err := range visitor.ErrorTable.Errors {
@@ -85,49 +80,52 @@ func main() {
 		return
 	}
 
-	// === Mostrar salida final (si no hay errores) ===
+// ... (todo lo anterior igual)
+
+	// === Iniciar traducción a ARM64 ===
+	armVisitor := arm.NewArmVisitor()
+	armVisitor.Visit(tree)
+
+	// Obtener instrucciones y funciones estándar necesarias
+	armInstructions := armVisitor.Generator.GetOutput()
+	stdLibCode := armVisitor.Generator.StdLib.GetFunctionDefinitions()
+
+	if len(armVisitor.Generator.Instructions) == 0 {
+		fmt.Println("⚠️ No se generaron instrucciones ARM.")
+		return
+	}
+
+	// Encabezado ARM64 correcto
+	armHeader := `.global _start
+.section .text
+_start:
+    BL main
+    mov x8, #93     // syscall: exit
+    svc #0
+
+`
+
+	// Concatenar todo
+	armFullCode := armHeader + armInstructions + "\n\n" + stdLibCode
+
+	// Escribir archivo
+	outputFile := "salida.s"
+	err = os.WriteFile(outputFile, []byte(armFullCode), 0644)
+	if err != nil {
+		fmt.Println("❌ Error escribiendo archivo ARM:", err)
+		return
+	}
+
+	fmt.Println("✅ Código ARM generado correctamente en", outputFile)
+
+	// Mostrar salida interpretada
 	fmt.Println("✅ Ejecución finalizada sin errores. Salida:")
 	fmt.Println(console.GetOutput())
+
 }
 
+// Utilidad para leer stdin
 func readStdin() (string, error) {
 	input, err := os.ReadFile("/dev/stdin")
 	return string(input), err
-}
-
-// Funciones para visualizar nuestro arbol
-func PrintVerticalTree(node antlr.Tree, ruleNames []string) {
-	printVerticalNode(node, ruleNames, "", true)
-}
-
-func printVerticalNode(node antlr.Tree, ruleNames []string, prefix string, isLast bool) {
-	connector := "+-- "
-	if !isLast {
-		connector = "|-- "
-	}
-
-	var label string
-	switch n := node.(type) {
-	case antlr.RuleNode:
-		label = ruleNames[n.GetRuleContext().GetRuleIndex()]
-	case antlr.TerminalNode:
-		label = fmt.Sprintf("\"%s\"", n.GetText())
-	default:
-		label = fmt.Sprintf("%T", n)
-	}
-
-	fmt.Printf("%s%s%s\n", prefix, connector, label)
-
-	// Actualizar el prefijo para los hijos
-	childCount := node.GetChildCount()
-	for i := 0; i < childCount; i++ {
-		child := node.GetChild(i)
-		newPrefix := prefix
-		if isLast {
-			newPrefix += "    "
-		} else {
-			newPrefix += "|   "
-		}
-		printVerticalNode(child, ruleNames, newPrefix, i == childCount-1)
-	}
 }
