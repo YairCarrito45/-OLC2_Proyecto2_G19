@@ -11,8 +11,9 @@ import (
 type ArmGenerator struct {
 	Instructions []string
 	Variables    map[string]string
+	VarOffset    int // ← Añade esto
 	Output       string
-	StdLib       *StandardLibrary // ← asegurarse de que esté inicializado
+	StdLib       *StandardLibrary
 }
 
 
@@ -22,9 +23,9 @@ type ArmGenerator struct {
 // o agreguen al string lo que vamos haciendo
 //
 
-// funcion para agregar comnetarios la codigo
+// funcion para agregar comnetarios al codigo
 func (g *ArmGenerator) Comment(comment string) {
-	g.Instructions = append(g.Instructions, "## "+comment)
+    g.Instructions = append(g.Instructions, "# "+comment)
 }
 
 /*

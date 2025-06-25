@@ -9,11 +9,11 @@ import (
 	"os"
 	"strings"
 
+	"compiler/arm"
 	"compiler/errors"
 	parser "compiler/parser"
 	"compiler/repl"
 	_ "image/png"
-
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -67,11 +67,26 @@ a.Settings().SetTheme(DarkMonoTheme{})
 	consoleScroll := container.NewScroll(console)
 	consoleScroll.SetMinSize(fyne.NewSize(400, 300))
 
+	codigoARM := widget.NewMultiLineEntry()
+	codigoARM.Disable()
+	stylizeEntry(codigoARM)
+
+	codigoARMScroll := container.NewScroll(codigoARM)
+	codigoARMScroll.SetMinSize(fyne.NewSize(400, 300))
+
+	codigoARMBox := container.NewBorder(
+		styledLabel("Código ARM generado:", false),
+		nil, nil, nil,
+		codigoARMScroll,
+	)
+
 	consolaBox := container.NewBorder(
 		styledLabel("Consola:", false),
 		nil, nil, nil,
 		consoleScroll,
 	)
+
+	
 
 	var currentFile fyne.URI
 
@@ -179,7 +194,6 @@ a.Settings().SetTheme(DarkMonoTheme{})
 	}
 
 
-
 	reportTabs := container.NewAppTabs(
 		container.NewTabItem("Errores", container.NewScroll(erroresTabla)),
 		container.NewTabItem("Símbolos", container.NewScroll(tablaSimbolos)),
@@ -253,8 +267,6 @@ a.Settings().SetTheme(DarkMonoTheme{})
 		}
 		tablaSimbolos.Refresh()
 
-
-
 		// === Generar AST localmente con DOT + Graphviz ===
 		dot := GenerateTreeDOT(tree, p)
 
@@ -305,277 +317,61 @@ a.Settings().SetTheme(DarkMonoTheme{})
 		reportTabs.Items[2].Content = astContainer
 		reportTabs.Refresh()
 
+
+		armVisitor := arm.NewArmVisitor()
+		armVisitor.Visit(tree)
+
+		armInstructions := armVisitor.Generator.GetOutput()
+		stdLibCode := armVisitor.Generator.StdLib.GetFunctionDefinitions()
+
+		// Encabezado ARM64
+		armHeader := `.global _start
+		.section .text
+		_start:
+			BL main
+			mov x8, #93     
+			svc #0
+
+		`
+		armFullCode := armHeader + armInstructions + "\n\n" + stdLibCode
+
+		// Mostrar en TextArea
+		codigoARM.SetText(armFullCode)
 	})
 
 
+	btnReportes := widget.NewButton("Ver Reportes", func() {
+		ventanaReportes := a.NewWindow("Reportes")
+		ventanaReportes.Resize(fyne.NewSize(900, 400))
 
-	toolbar := container.NewHBox(btnNuevo, btnAbrir, btnGuardar, btnEjecutar)
+		reportScroll := container.NewScroll(reportTabs)
+		ventanaReportes.SetContent(reportScroll)
+		ventanaReportes.Show()
+	})
 
-	horizontal := container.NewHSplit(entradaBox, consolaBox)
-	horizontal.Offset = 0.5
 
-	principal := container.NewVSplit(horizontal, reportTabs)
-	principal.Offset = 0.4
+	toolbar := container.NewHBox(btnNuevo, btnAbrir, btnGuardar, btnEjecutar, btnReportes)
 
-	w.SetContent(container.NewBorder(toolbar, nil, nil, nil, principal))
+	horizontal := container.NewHSplit(
+		entradaBox,
+		container.NewVSplit(consolaBox, codigoARMBox),
+	)
+
+
+
+
+	
+	reportScroll := container.NewScroll(reportTabs)
+	reportScroll.SetMinSize(fyne.NewSize(800, 250))
+
+	w.SetContent(container.NewBorder(toolbar, nil, nil, nil, horizontal))
+
+
+
+
 	w.ShowAndRun()
 }
 
-func PrintVerticalTree(node antlr.Tree, ruleNames []string, prefix string, isLast bool, out *strings.Builder) {
-	connector := "+-- "
-	if !isLast {
-		connector = "|-- "
-	}
-
-	var label string
-	switch n := node.(type) {
-	case antlr.RuleNode:
-		ruleIndex := n.GetRuleContext().GetRuleIndex()
-		if ruleIndex >= 0 && ruleIndex < len(ruleNames) {
-			label = ruleNames[ruleIndex]
-			switch label {
-			case "programa":
-				label = "programa"
-			case "funcion":
-				label = "funcion"
-			case "declaraciones":
-				label = "declaraciones"
-			case "sentencia":
-				label = "sentencia"
-			case "expresion":
-				label = "expresion"
-			case "asignacion":
-				label = "asignacion"
-			case "retorno":
-				label = "retorno"
-			default:
-				if strings.HasPrefix(label, "valor") || strings.HasPrefix(label, "tipo") {
-					label = "valor"
-				} else {
-					label = "nodo"
-				}
-			}
-		} else {
-			label = "nodo"
-		}
-	case antlr.TerminalNode:
-		text := n.GetText()
-		if text == ";" || text == "(" || text == ")" || text == "{" || text == "}" {
-			return
-		}
-		label = fmt.Sprintf("\"%s\"", text)
-	default:
-		label = "nodo"
-	}
-
-	out.WriteString(fmt.Sprintf("%s%s%s\n", prefix, connector, label))
-
-	for i := 0; i < node.GetChildCount(); i++ {
-		child := node.GetChild(i)
-		newPrefix := prefix
-		if isLast {
-			newPrefix += "    "
-		} else {
-			newPrefix += "|   "
-		}
-		PrintVerticalTree(child, ruleNames, newPrefix, i == node.GetChildCount()-1, out)
-	}
-}
-
-
-
-func GenerateASTSVG(tree antlr.Tree, ruleNames []string) string {
-	fmt.Println("🔍 Iniciando generación de SVG...")
-	fmt.Printf("🔍 Tree: %T, RuleNames: %d\n", tree, len(ruleNames))
-	
-	// Verificar que el árbol no sea nil
-	if tree == nil {
-		fmt.Println("❌ Tree es nil")
-		return ""
-	}
-	
-	var svg strings.Builder
-
-	// SVG header con fondo de prueba más visible
-	svg.WriteString(`<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1200" viewBox="0 0 2000 1200">
-<defs>
-<style>
-.node-rect { fill: #4a4a4a; stroke: #2a2a2a; stroke-width: 1.5; rx: 5; filter: url(#shadow); }
-.terminal-rect { fill: #2ecc71; stroke: #27ae60; stroke-width: 1.5; rx: 5; filter: url(#shadow); }
-.node-text {
-	font-family: 'Arial', sans-serif;
-	font-size: 13px;
-	fill: #ffffff;
-	text-anchor: middle;
-	dominant-baseline: central;
-	paint-order: stroke;
-	stroke: #000000;
-	stroke-width: 0.5px;
-}
-
-.edge-line { stroke: #34495e; stroke-width: 1.5; }
-.bg { fill: #f0f0f0; stroke: #cccccc; stroke-width: 2; }
-</style>
-<filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-  <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-  <feOffset dx="1" dy="1" result="offsetblur"/>
-  <feComponentTransfer>
-    <feFuncA type="linear" slope="0.5"/>
-  </feComponentTransfer>
-  <feMerge>
-    <feMergeNode/>
-    <feMergeNode in="SourceGraphic"/>
-  </feMerge>
-</filter>
-</defs>
-<!-- Fondo visible para debugging -->
-<rect x="0" y="0" width="2000" height="1200" class="bg"/>
-<!-- Marcador visual de prueba -->
-<rect x="10" y="10" width="100" height="30" fill="red" stroke="black"/>
-<text x="60" y="25" font-family="Arial" font-size="12" fill="white" text-anchor="middle">TEST</text>
-`)
-
-	nodeCounter := 0
-	nodesGenerated := 0
-
-	var generateNodes func(node antlr.Tree, x, y, level int) int
-	generateNodes = func(node antlr.Tree, x, y, level int) int {
-		if node == nil {
-			fmt.Printf("⚠️ Nodo nil en nivel %d\n", level)
-			return nodeCounter
-		}
-		
-		fmt.Printf("🔍 Procesando nodo en (%d,%d) nivel %d: %T\n", x, y, level, node)
-		
-		var label string
-		var isTerminal bool
-
-		switch n := node.(type) {
-		case antlr.RuleNode:
-			ruleIndex := n.GetRuleContext().GetRuleIndex()
-			fmt.Printf("🔍 RuleNode - RuleIndex: %d\n", ruleIndex)
-			if ruleIndex >= 0 && ruleIndex < len(ruleNames) {
-				label = ruleNames[ruleIndex]
-			} else {
-				label = fmt.Sprintf("rule_%d", ruleIndex)
-			}
-			isTerminal = false
-		case antlr.TerminalNode:
-			text := n.GetText()
-			fmt.Printf("🔍 TerminalNode - Text: '%s'\n", text)
-			// Solo omitir tokens específicos, no todos los símbolos
-			if text == ";" || text == "(" || text == ")" || text == "{" || text == "}" {
-				fmt.Printf("⏭️ Omitiendo símbolo: '%s'\n", text)
-				return nodeCounter
-			}
-			// Escape special characters for SVG
-			label = strings.ReplaceAll(text, "&", "&amp;")
-			label = strings.ReplaceAll(label, "<", "&lt;")
-			label = strings.ReplaceAll(label, ">", "&gt;")
-			label = strings.ReplaceAll(label, "\"", "&quot;")
-			isTerminal = true
-		default:
-			fmt.Printf("🔍 Nodo desconocido: %T\n", node)
-			label = "unknown"
-			isTerminal = false
-		}
-
-		if label == "" {
-			label = "empty"
-		}
-
-		fmt.Printf("✅ Generando nodo: '%s' (terminal: %v)\n", label, isTerminal)
-
-		// Dynamic width based on text length, with minimum and maximum bounds
-		textLength := len(label) * 7
-		width := max(60, min(textLength+20, 200))
-		height := 28
-		rectClass := "node-rect"
-		if isTerminal {
-			rectClass = "terminal-rect"
-		}
-
-		// Generar el rectángulo y texto del nodo
-		svg.WriteString(fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" class="%s"/>
-<text x="%d" y="%d" class="node-text">%s</text>
-`, x-width/2, y-height/2, width, height, rectClass, x, y, label))
-
-		nodesGenerated++
-
-		childCount := node.GetChildCount()
-		fmt.Printf("🔍 Nodo '%s' tiene %d hijos\n", label, childCount)
-		
-		if childCount > 0 {
-			// Dynamic spacing based on level and number of children
-			childSpacing := max(120-level*15, 80) // Más espaciado
-			startX := x - (childCount-1)*childSpacing/2
-			childY := y + 100 + level*20 // Más separación vertical
-
-			for i := 0; i < childCount; i++ {
-				child := node.GetChild(i)
-				if child == nil {
-					fmt.Printf("⚠️ Hijo %d es nil\n", i)
-					continue
-				}
-				
-				childX := startX + i*childSpacing
-
-				// Dibujar línea de conexión
-				svg.WriteString(fmt.Sprintf(`<line x1="%d" y1="%d" x2="%d" y2="%d" class="edge-line"/>
-`, x, y+height/2, childX, childY-height/2))
-
-				generateNodes(child, childX, childY, level+1)
-			}
-		}
-
-		nodeCounter++
-		return nodeCounter
-	}
-
-	// Start from the root, centered
-	fmt.Println("🔍 Iniciando generación desde la raíz...")
-	generateNodes(tree, 1000, 100, 0)
-
-	svg.WriteString("</svg>")
-	
-	result := svg.String()
-	fmt.Printf("✅ SVG generado: %d caracteres, %d nodos\n", len(result), nodesGenerated)
-	
-	// Debug: mostrar inicio del SVG
-	if len(result) > 200 {
-		fmt.Printf("🔍 Inicio del SVG: %s...\n", result[:200])
-	}
-	
-	// Guardar SVG para debugging (opcional)
-	if err := os.WriteFile("debug_ast.svg", []byte(result), 0644); err == nil {
-		fmt.Println("🔍 SVG guardado en debug_ast.svg")
-	}
-	
-	return result
-}
-
-// Función auxiliar para verificar el árbol
-func DebugTree(tree antlr.Tree, level int) {
-	if tree == nil {
-		return
-	}
-	
-	indent := strings.Repeat("  ", level)
-	
-	switch n := tree.(type) {
-	case antlr.RuleNode:
-		fmt.Printf("%sRULE: %d (children: %d)\n", indent, n.GetRuleContext().GetRuleIndex(), tree.GetChildCount())
-	case antlr.TerminalNode:
-		fmt.Printf("%sTERM: '%s'\n", indent, n.GetText())
-	default:
-		fmt.Printf("%sUNKNOWN: %T (children: %d)\n", indent, tree, tree.GetChildCount())
-	}
-	
-	for i := 0; i < tree.GetChildCount(); i++ {
-		DebugTree(tree.GetChild(i), level+1)
-	}
-}
 
 
 func GenerateTreeDOT(root antlr.Tree, parser *parser.VlangParser) string {

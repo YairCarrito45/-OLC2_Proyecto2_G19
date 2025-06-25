@@ -148,3 +148,44 @@ func (v *ArmVisitor) VisitReturnStatement(ctx *parser.ReturnStatementContext) in
 	v.Generator.Add("svc #0")
 	return nil
 }
+
+
+func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationContext) interface{} {
+
+	varName := ctx.ID().GetText()
+	fmt.Println("🔧 Declarando variable:", varName)
+
+	// Reservamos espacio en la pila
+	offset := v.Generator.VarOffset
+	memLocation := fmt.Sprintf("[SP, #%d]", offset)
+
+	if ctx.Expresion() != nil {
+		v.Visit(ctx.Expresion()) // Resultado se espera en X0
+		v.Generator.Add(fmt.Sprintf("STR X0, %s", memLocation)) // Guardar en memoria
+		v.Generator.Comment(fmt.Sprintf("Variable %s inicializada con valor en X0", varName))
+	} else {
+		v.Generator.Add("MOV X0, #0")
+		v.Generator.Add(fmt.Sprintf("STR X0, %s", memLocation))
+		v.Generator.Comment(fmt.Sprintf("Variable %s declarada sin valor (inicializada en 0)", varName))
+	}
+
+	v.Generator.Variables[varName] = memLocation
+	v.Generator.VarOffset += 8 // siguiente variable irá 8 bytes más adelante
+
+	return nil
+}
+
+
+
+func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
+	varName := ctx.GetText()
+	memLoc, ok := v.Generator.Variables[varName]
+	if !ok {
+		fmt.Printf("⚠️ Variable no encontrada: %s\n", varName)
+		return nil
+	}
+
+	v.Generator.Comment(fmt.Sprintf("Accediendo variable %s", varName))
+	v.Generator.Add(fmt.Sprintf("LDR X0, %s", memLoc)) // cargar a X0
+	return nil
+}

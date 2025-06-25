@@ -86,41 +86,7 @@ func main() {
 	armVisitor := arm.NewArmVisitor()
 	armVisitor.Visit(tree)
 
-	// Obtener instrucciones y funciones estándar necesarias
-	armInstructions := armVisitor.Generator.GetOutput()
-	stdLibCode := armVisitor.Generator.StdLib.GetFunctionDefinitions()
 
-	if len(armVisitor.Generator.Instructions) == 0 {
-		fmt.Println("⚠️ No se generaron instrucciones ARM.")
-		return
-	}
-
-	// Encabezado ARM64 correcto
-	armHeader := `.global _start
-.section .text
-_start:
-    BL main
-    mov x8, #93     // syscall: exit
-    svc #0
-
-`
-
-	// Concatenar todo
-	armFullCode := armHeader + armInstructions + "\n\n" + stdLibCode
-
-	// Escribir archivo
-	outputFile := "salida.s"
-	err = os.WriteFile(outputFile, []byte(armFullCode), 0644)
-	if err != nil {
-		fmt.Println("❌ Error escribiendo archivo ARM:", err)
-		return
-	}
-
-	fmt.Println("✅ Código ARM generado correctamente en", outputFile)
-
-	// Mostrar salida interpretada
-	fmt.Println("✅ Ejecución finalizada sin errores. Salida:")
-	fmt.Println(console.GetOutput())
 
 }
 
