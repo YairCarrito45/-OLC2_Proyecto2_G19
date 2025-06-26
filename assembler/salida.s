@@ -28,6 +28,34 @@ SUB x4, x2, x3
 # Print statement
 MOV X0, x4
 BL print_integer
+# Literal entero: 10
+MOV x1, #10
+# Literal entero: 2
+MOV x2, #2
+# Multiplicación: x1 * x2
+MUL x3, x1, x2
+# Print statement
+MOV X0, x3
+BL print_integer
+# Literal entero: 20
+MOV x4, #20
+# Literal entero: 4
+MOV x1, #4
+# División: x4 / x1
+UDIV x2, x4, x1
+# Print statement
+MOV X0, x2
+BL print_integer
+# Literal entero: 13
+MOV x3, #13
+# Literal entero: 5
+MOV x4, #5
+# Módulo: x3 % x4
+UDIV x25, x3, x4
+MSUB x1, x25, x4, x3
+# Print statement
+MOV X0, x1
+BL print_integer
 RET
 
 //--------------------------------------------------------------

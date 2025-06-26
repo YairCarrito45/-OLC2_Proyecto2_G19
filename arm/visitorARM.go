@@ -299,3 +299,28 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 }
 
 
+func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} {
+    fmt.Println("✖️➗ VisitMultdivmod")
+
+    left := v.Visit(ctx.GetChild(0).(antlr.ParseTree)).(string)
+    right := v.Visit(ctx.GetChild(2).(antlr.ParseTree)).(string)
+    result := v.Generator.NextTempReg()
+
+    switch ctx.GetOp().GetText() {
+    case "*":
+        v.Generator.Comment(fmt.Sprintf("Multiplicación: %s * %s", left, right))
+        v.Generator.Add(fmt.Sprintf("MUL %s, %s, %s", result, left, right))
+    case "/":
+        v.Generator.Comment(fmt.Sprintf("División: %s / %s", left, right))
+        v.Generator.Add(fmt.Sprintf("UDIV %s, %s, %s", result, left, right))
+    case "%":
+        v.Generator.Comment(fmt.Sprintf("Módulo: %s %% %s", left, right))
+        // x26 = left - (left / right) * right
+        v.Generator.Add(fmt.Sprintf("UDIV x25, %s, %s", left, right))    // x25 = left / right
+        v.Generator.Add(fmt.Sprintf("MSUB %s, x25, %s, %s", result, right, left)) // result = left - (x25 * right)
+    default:
+        fmt.Println("⚠️ Operador desconocido en multdivmod:", ctx.GetOp().GetText())
+    }
+
+    return result
+}
