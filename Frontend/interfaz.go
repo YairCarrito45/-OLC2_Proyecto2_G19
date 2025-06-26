@@ -202,9 +202,10 @@ a.Settings().SetTheme(DarkMonoTheme{})
 
 	btnEjecutar := widget.NewButton("Ejecutar", func() {
 		codigo := editor.Text
-		if !strings.Contains(codigo, "fun main") {
-			codigo = "fun main() {\n" + codigo + "\n}"
-		}
+		fmt.Println("Texto ingresado:", codigo) // Agregar esta línea
+			if !strings.Contains(codigo, "fn main") {
+				codigo = "fn main() {\n" + codigo + "\n}"
+			}
 
 
 		lexListener := errors.NewLexicalErrorListener()
@@ -224,6 +225,8 @@ a.Settings().SetTheme(DarkMonoTheme{})
 		tree := p.Programa()
 
 		consoleObj := repl.NewConsole()
+
+		// visitor para interfaz, hace que se muestre en consola
 		visitor := repl.NewReplVisitor(consoleObj)
 		visitor.Visit(tree)
 
@@ -322,14 +325,21 @@ a.Settings().SetTheme(DarkMonoTheme{})
 		reportTabs.Refresh()
 
 
+		// visitor para arm para que aparezca en el area  de arm
+		fmt.Println("🚀 Iniciando generación ARM")
 		armVisitor := arm.NewArmVisitor()
 		armVisitor.Visit(tree)
+		fmt.Println("✅ Finalizó generación ARM")
 
 		armFullCode := armVisitor.Generator.GetFullCode()
 
 		fmt.Println("=== ARM generado ===")
 		fmt.Println(armFullCode)
 		codigoARM.SetText(armFullCode)
+		
+
+
+		
 
 
 
