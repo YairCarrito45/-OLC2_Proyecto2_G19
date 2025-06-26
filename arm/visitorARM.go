@@ -4,25 +4,38 @@ import (
 	"fmt"
 	parser "compiler/parser"
 	"github.com/antlr4-go/antlr/v4"
+    
 )
 
 // ArmVisitor recorre el árbol de análisis y genera código ARM64.
 type ArmVisitor struct {
 	parser.BaseVlangVisitor
-	Generator *ArmGenerator // Generador de instrucciones ARM
+	Generator   *ArmGenerator
+	LastResult  string // ← agrega esto
 }
 
 // NewArmVisitor construye un nuevo visitor para generación ARM.
 func NewArmVisitor() *ArmVisitor {
 	return &ArmVisitor{
-		Generator: &ArmGenerator{
-			Instructions: []string{},
-			Variables:    make(map[string]string),
-			Output:       "",
-			StdLib:       NewStandardLibrary(),
-		},
+        Generator: &ArmGenerator{
+            Instructions: []string{},
+            Variables:    make(map[string]string),
+            Output:       "",
+            StdLib:       NewStandardLibrary(),
+            VarOffset:    0,
+            tempRegs:     []string{X1, X2, X3, X4}, // evita X0 (lo usa syscall)
+            tempIndex:    0,
+        },
+
 	}
 }
+
+func (g *ArmGenerator) NextTempReg() string {
+	reg := g.tempRegs[g.tempIndex]
+	g.tempIndex = (g.tempIndex + 1) % len(g.tempRegs)
+	return reg
+}
+
 
 // Visit permite que ArmVisitor recorra cualquier árbol ANTLR.
 func (v *ArmVisitor) Visit(tree antlr.ParseTree) interface{} {
@@ -60,7 +73,8 @@ func (v *ArmVisitor) VisitDeclaraciones(ctx *parser.DeclaracionesContext) interf
 // VisitPrograma recorre todas las declaraciones del programa.
 func (v *ArmVisitor) VisitPrograma(ctx *parser.ProgramaContext) interface{} {
 	for _, decl := range ctx.AllDeclaraciones() {
-        if fn := decl.Funcion(); fn != nil && fn.ID().GetText() == "main" {
+		if fn := decl.Funcion(); fn != nil && fn.ID().GetText() == "main" {
+            fmt.Println("🖨️ Println encontrado")
             fmt.Println("🔁 Generando código para función main")
             v.Generator.Add("main:") // Etiqueta ARM
             v.Visit(fn)
@@ -78,31 +92,39 @@ func (v *ArmVisitor) VisitPrograma(ctx *parser.ProgramaContext) interface{} {
 // VisitValorEntero genera código para una literal entera.
 func (v *ArmVisitor) VisitValorEntero(ctx *parser.ValorEnteroContext) interface{} {
 	value := ctx.GetText()
-	fmt.Println("Visiting IntLiteral:", value)
-	v.Generator.Comment("Literal agregada: " + value)
-	v.Generator.Add("MOV X0, #" + value) // Mueve el valor a X0
-	v.Generator.Comment("Valor movido a X0: " + value)
-	return nil
+
+	// Obtener siguiente registro temporal
+	reg := v.Generator.NextTempReg()
+
+	v.Generator.Comment("Literal entero: " + value)
+	v.Generator.Add(fmt.Sprintf("MOV %s, #%s", reg, value))
+
+	// Guardamos el último registro usado por esta expresión
+	v.LastResult = reg
+
+	return reg
 }
+
 
 // VisitPrintStatement traduce una instrucción println(...).
 func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) interface{} {
 	if ctx.Parametros() != nil && ctx.Parametros().GetChildCount() > 0 {
-		// Cast necesario: GetChild devuelve Tree, pero necesitamos ParseTree
 		expr, ok := ctx.Parametros().GetChild(0).(antlr.ParseTree)
 		if !ok {
 			fmt.Println("⚠️ No se pudo castear el parámetro a ParseTree")
 			return nil
 		}
 
-		v.Visit(expr)
+		v.Visit(expr) // Esto debería establecer v.LastResult
 
 		v.Generator.Comment("Print statement")
+		v.Generator.Add(fmt.Sprintf("MOV %s, %s", X0, v.LastResult)) // mueve a X0
 		v.Generator.StdLib.Use("print_integer")
 		v.Generator.Add("BL print_integer")
 	}
 	return nil
 }
+
 
 // VisitStmt permite visitar una sentencia (stmt).
 func (v *ArmVisitor) VisitStmt(ctx *parser.StmtContext) interface{} {

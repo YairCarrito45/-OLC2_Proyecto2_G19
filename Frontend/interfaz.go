@@ -202,6 +202,10 @@ a.Settings().SetTheme(DarkMonoTheme{})
 
 	btnEjecutar := widget.NewButton("Ejecutar", func() {
 		codigo := editor.Text
+		if !strings.Contains(codigo, "fun main") {
+			codigo = "fun main() {\n" + codigo + "\n}"
+		}
+
 
 		lexListener := errors.NewLexicalErrorListener()
 		lexer := parser.NewVlangLexer(antlr.NewInputStream(codigo))
@@ -321,22 +325,14 @@ a.Settings().SetTheme(DarkMonoTheme{})
 		armVisitor := arm.NewArmVisitor()
 		armVisitor.Visit(tree)
 
-		armInstructions := armVisitor.Generator.GetOutput()
-		stdLibCode := armVisitor.Generator.StdLib.GetFunctionDefinitions()
+		armFullCode := armVisitor.Generator.GetFullCode()
 
-		// Encabezado ARM64
-		armHeader := `.global _start
-		.section .text
-		_start:
-			BL main
-			mov x8, #93     
-			svc #0
-
-		`
-		armFullCode := armHeader + armInstructions + "\n\n" + stdLibCode
-
-		// Mostrar en TextArea
+		fmt.Println("=== ARM generado ===")
+		fmt.Println(armFullCode)
 		codigoARM.SetText(armFullCode)
+
+
+
 	})
 
 
@@ -350,7 +346,19 @@ a.Settings().SetTheme(DarkMonoTheme{})
 	})
 
 
-	toolbar := container.NewHBox(btnNuevo, btnAbrir, btnGuardar, btnEjecutar, btnReportes)
+	btnExportarARM := widget.NewButton("Exportar .s", func() {
+		saveDialog := dialog.NewFileSave(func(wr fyne.URIWriteCloser, err error) {
+			if err == nil && wr != nil {
+				wr.Write([]byte(codigoARM.Text))
+				wr.Close()
+			}
+		}, w)
+		saveDialog.SetFileName("salida.s")
+		saveDialog.Show()
+	})
+
+
+	toolbar := container.NewHBox(btnNuevo, btnAbrir, btnGuardar, btnEjecutar, btnReportes, btnExportarARM)
 
 	horizontal := container.NewHSplit(
 		entradaBox,

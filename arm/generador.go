@@ -11,10 +11,15 @@ import (
 type ArmGenerator struct {
 	Instructions []string
 	Variables    map[string]string
-	VarOffset    int // ← Añade esto
 	Output       string
+	VarOffset    int
 	StdLib       *StandardLibrary
+
+	tempRegs  []string
+	tempIndex int
 }
+
+
 
 
 // Agregamos las cosas al string y el string es la traduccion
@@ -139,8 +144,19 @@ syscall EndProgram
 
 */
 
-func (gen *ArmGenerator) GetOutput() string {
-	code := strings.Join(gen.Instructions, "\n")
-	code += "\n\n" + gen.StdLib.GetFunctionDefinitions()
-	return code
+func (g *ArmGenerator) GetOutput() string {
+	return strings.Join(g.Instructions, "\n")
 }
+
+
+func (g *ArmGenerator) GetFullCode() string {
+	header := `.global _start
+.section .text
+_start:
+    BL main
+    mov x8, #93
+    svc #0
+`
+	return header + "\n" + g.GetOutput() + "\n\n" + g.StdLib.GetFunctionDefinitions()
+}
+
