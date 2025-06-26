@@ -6,6 +6,10 @@ _start:
     svc #0
 
 main:
+# Literal entero: 123
+MOV x1, #123
+# Print statement
+MOV X0, x1
 
 //--------------------------------------------------------------
 // print_integer - Prints a signed integer to stdout

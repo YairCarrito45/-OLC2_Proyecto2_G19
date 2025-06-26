@@ -144,8 +144,7 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
     }
 
     v.Generator.Comment("Print statement")
-    v.Generator.Add(fmt.Sprintf("MOV X0, %s", reg))
-    v.Generator.Add("BL print_integer")
+	v.Generator.Add(fmt.Sprintf("MOV X0, %s", reg))
     return nil
 }
 
