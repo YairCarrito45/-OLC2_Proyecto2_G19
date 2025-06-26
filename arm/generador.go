@@ -159,4 +159,3 @@ _start:
 `
 	return header + "\n" + g.GetOutput() + "\n\n" + g.StdLib.GetFunctionDefinitions()
 }
-

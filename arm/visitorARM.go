@@ -126,14 +126,13 @@ func (v *ArmVisitor) VisitValorEntero(ctx *parser.ValorEnteroContext) interface{
 func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) interface{} {
     fmt.Println("🖨️ VisitPrintStatement ARM")
 
-    v.Generator.StdLib.Use("print_integer")
-
     if ctx.Parametros() == nil || len(ctx.Parametros().AllExpresion()) == 0 {
         return nil
     }
 
     expr := ctx.Parametros().AllExpresion()[0]
     fmt.Println("Nodo expresión:", expr.GetText(), "Tipo:", fmt.Sprintf("%T", expr))
+    
     val := v.Visit(expr)
     fmt.Println("Valor devuelto por expresión:", val, "Tipo:", fmt.Sprintf("%T", val))
 
@@ -144,9 +143,11 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
     }
 
     v.Generator.Comment("Print statement")
-	v.Generator.Add(fmt.Sprintf("MOV X0, %s", reg))
+    PrintInteger(v.Generator, reg) // ✅ Usa función reutilizable
+
     return nil
 }
+
 
 
 
@@ -188,6 +189,9 @@ func (v *ArmVisitor) VisitFuncion(ctx *parser.FuncionContext) interface{} {
     } else {
         fmt.Println("⚠️ Bloque no encontrado para", funcName)
     }
+
+    // ✅ Agregar un RET al final de cada función
+    v.Generator.Add("RET")
     return nil
 }
 
@@ -250,10 +254,13 @@ func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
 		return nil
 	}
 
+	reg := v.Generator.NextTempReg()
 	v.Generator.Comment(fmt.Sprintf("Accediendo variable %s", varName))
-	v.Generator.Add(fmt.Sprintf("LDR X0, %s", memLoc)) // cargar a X0
-	return nil
+	v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, memLoc)) // cargar a reg temporal
+
+	return reg
 }
+
 
 
 func (v *ArmVisitor) VisitValorexpr(ctx *parser.ValorexprContext) interface{} {
@@ -290,6 +297,5 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 
     return result
 }
-
 
 
