@@ -6,10 +6,16 @@ _start:
     svc #0
 
 main:
-# Literal entero: 123
-MOV x1, #123
-# Print statement
-MOV X0, x1
+# Literal entero: 1
+MOV x1, #1
+# Literal entero: 100
+MOV x2, #100
+# Resta: x1 - x2
+SUB x3, x1, x2
+STR x3, [SP, #0]
+# Variable a inicializada con valor en x3
+# Accediendo variable a
+LDR X0, [SP, #0]
 
 //--------------------------------------------------------------
 // print_integer - Prints a signed integer to stdout

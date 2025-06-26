@@ -210,7 +210,6 @@ func (v *ArmVisitor) VisitReturnStatement(ctx *parser.ReturnStatementContext) in
 
 
 func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationContext) interface{} {
-
 	varName := ctx.ID().GetText()
 	fmt.Println("🔧 Declarando variable:", varName)
 
@@ -219,21 +218,27 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 	memLocation := fmt.Sprintf("[SP, #%d]", offset)
 
 	if ctx.Expresion() != nil {
-		v.Visit(ctx.Expresion()) // Resultado se espera en X0
-		v.Generator.Add(fmt.Sprintf("STR X0, %s", memLocation)) // Guardar en memoria
-		v.Generator.Comment(fmt.Sprintf("Variable %s inicializada con valor en X0", varName))
+		val := v.Visit(ctx.Expresion())
+		reg, ok := val.(string)
+		if !ok {
+			fmt.Printf("⚠️ Error: expresión no retornó un registro válido para variable '%s'\n", varName)
+			return nil
+		}
+
+		v.Generator.Add(fmt.Sprintf("STR %s, %s", reg, memLocation))
+		v.Generator.Comment(fmt.Sprintf("Variable %s inicializada con valor en %s", varName, reg))
 	} else {
 		v.Generator.Add(fmt.Sprintf("MOV %s, #0", X0))
-
-		v.Generator.Add(fmt.Sprintf("STR X0, %s", memLocation))
+		v.Generator.Add(fmt.Sprintf("STR %s, %s", X0, memLocation))
 		v.Generator.Comment(fmt.Sprintf("Variable %s declarada sin valor (inicializada en 0)", varName))
 	}
 
 	v.Generator.Variables[varName] = memLocation
-	v.Generator.VarOffset += 8 // siguiente variable irá 8 bytes más adelante
+	v.Generator.VarOffset += 8
 
 	return nil
 }
+
 
 
 
@@ -262,4 +267,29 @@ func (v *ArmVisitor) VisitValorexpr(ctx *parser.ValorexprContext) interface{} {
 	fmt.Println("⚠️ ValorExpr no reconocido:", ctx.GetText())
 	return nil
 }
+
+
+
+func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
+    fmt.Println("➕➖ VisitSumres")
+
+    left := v.Visit(ctx.GetChild(0).(antlr.ParseTree)).(string)
+    right := v.Visit(ctx.GetChild(2).(antlr.ParseTree)).(string)
+    result := v.Generator.NextTempReg()
+
+    switch ctx.GetOp().GetText() {
+    case "+":
+        v.Generator.Comment(fmt.Sprintf("Suma: %s + %s", left, right))
+        Add(v.Generator, result, left, right)
+    case "-":
+        v.Generator.Comment(fmt.Sprintf("Resta: %s - %s", left, right))
+        Sub(v.Generator, result, left, right)
+    default:
+        fmt.Println("⚠️ Operador desconocido en sumres:", ctx.GetOp().GetText())
+    }
+
+    return result
+}
+
+
 
