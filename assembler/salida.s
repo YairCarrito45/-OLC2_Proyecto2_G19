@@ -6,82 +6,23 @@ _start:
     svc #0
 
 main:
-# Carga decimal 1.300000 desde memoria
-ADR x1, .str_12
+# Carga decimal 1.500000 desde memoria
+ADR x1, .str_0
 LDR d0, [x1]
-# Print float64
-FMOV D0, d0
-BL print_float
-# Salto de línea después de println
-ADR x1, .str_13
-MOV X0, x1
-BL print_string
-# Cadena literal: "hola"
-ADR x1, .str_14
-# Cadena literal: "andrea"
-ADR x2, .str_15
-ADR x3, .str_16
-# Print cadena
-MOV X0, x3
-BL print_string
-# Salto de línea después de println
-ADR x1, .str_17
-MOV X0, x1
-BL print_string
-# Carga decimal 1.300000 desde memoria
-ADR x1, .str_18
-LDR d0, [x1]
-# Literal entero: 1
-MOV x4, #1
+# Literal entero: 4
+MOV x1, #4
 # Convierte int a float64
-SCVTF d0, x4
-# Suma float + int
-FADD d1, d0, d0
+SCVTF d1, x1
+# Suma/Resta float + int
+FADD d2, d0, d1
 # Print float64
-FMOV D0, d1
+FMOV D0, d2
 BL print_float
 # Salto de línea después de println
-ADR x1, .str_19
+ADR x1, .str_1
 MOV X0, x1
 BL print_string
 RET
-
-.p2align 2
-//--------------------------------------------------------------
-// print_float - Prints a float64 with 3 decimal places
-//
-// Input:
-//   d0 - The float64 value to print
-//--------------------------------------------------------------
-print_float:
-    stp x29, x30, [sp, #-16]!
-    stp x19, x20, [sp, #-16]!
-    stp x21, x22, [sp, #-16]!
-
-    fmov d1, d0
-    fcvtzs x0, d0
-    bl print_integer
-
-    mov x0, #1
-    ldr x1, =dot_char
-    mov x2, #1
-    mov w8, #64
-    svc #0
-
-    scvtf d2, x0
-    fsub d3, d1, d2
-
-    ldr x19, =float1000
-    ldr d4, [x19]
-    fmul d5, d3, d4
-
-    fcvtzu x0, d5
-    bl print_integer
-
-    ldp x21, x22, [sp], #16
-    ldp x19, x20, [sp], #16
-    ldp x29, x30, [sp], #16
-    ret
 
 .p2align 2
 //--------------------------------------------------------------
@@ -112,6 +53,90 @@ got_length:
 
     ldp x29, x30, [sp], #16
     ret
+
+.p2align 2
+//--------------------------------------------------------------
+// print_float - Prints a float64 with 3 decimal places
+//
+// Input:
+//   d0 - The float64 value to print
+//--------------------------------------------------------------
+print_float:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+
+    // Copia original
+    fmov d1, d0
+
+    // Parte entera (redondeada hacia cero)
+    frintz d2, d0
+    fcvtzs x0, d2  // Convierte double a entero con redondeo hacia cero
+    bl print_integer
+
+    // Imprime punto decimal
+    mov x0, #1
+    ldr x1, =dot_char
+    mov x2, #1
+    mov w8, #64
+    svc #0
+
+    // Parte fraccionaria = d1 - d2
+    fsub d3, d1, d2
+
+    // Multiplica por 1000.0 para obtener 3 decimales
+    ldr x19, =float1000
+    ldr d4, [x19]
+    fmul d5, d3, d4
+
+    // Convierte a entero (sin signo)
+    fcvtzu x20, d5
+    bl print_3digit_integer
+
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+.p2align 2
+//--------------------------------------------------------------
+// print_3digit_integer - Always prints 3 digits with leading zeros
+// Input: x20 = integer [0-999]
+print_3digit_integer:
+    sub sp, sp, #16
+    mov x1, sp
+
+    // Hundreds
+    mov x2, #100
+    udiv x3, x20, x2
+    msub x20, x3, x2, x20
+    add x3, x3, #48
+    strb w3, [x1]
+
+    // Tens
+    mov x2, #10
+    udiv x3, x20, x2
+    msub x20, x3, x2, x20
+    add x3, x3, #48
+    strb w3, [x1, #1]
+
+    // Units
+    add x3, x20, #48
+    strb w3, [x1, #2]
+
+    // Null-terminator
+    mov w3, #0
+    strb w3, [x1, #3]      // <- Terminación del string
+
+    // Syscall
+    mov x0, #1
+    mov x2, #3             // aún puedes usar 3 bytes si lo prefieres
+    mov w8, #64
+    svc #0
+
+    add sp, sp, #16
+    ret
+
 
 .p2align 2
 //--------------------------------------------------------------
@@ -200,25 +225,12 @@ minus_sign:
     .ascii "-"
 
 .section .data
-.str_13:
-	.asciz "\n"
-.str_14:
-	.asciz "hola"
-.str_15:
-	.asciz "andrea"
-.str_16:
-	.asciz "holaandrea"
-.str_17:
-	.asciz "\n"
-.str_19:
+.str_1:
 	.asciz "\n"
 .p2align 3
 .p2align 3
-.str_12:
-    .double 1.300000
-.p2align 3
-.str_18:
-    .double 1.300000
+.str_0:
+    .double 1.500000
 .p2align 2
 dot_char:
 	.asciz "."

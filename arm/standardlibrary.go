@@ -9,11 +9,10 @@ type StandardLibrary struct {
 }
 
 
-func (lib *StandardLibrary) IsUsed(name string) bool {
-	_, exists := lib.usedFunctions[name]
-	return exists
+func (s *StandardLibrary) IsUsed(name string) bool {
+	_, ok := s.usedFunctions[name]
+	return ok
 }
-
 
 
 
@@ -158,6 +157,46 @@ got_length:
     ldp x29, x30, [sp], #16
     ret`,
 
+	"print_3digit_integer": `.p2align 2
+//--------------------------------------------------------------
+// print_3digit_integer - Always prints 3 digits with leading zeros
+// Input: x20 = integer [0-999]
+print_3digit_integer:
+    sub sp, sp, #16
+    mov x1, sp
+
+    // Hundreds
+    mov x2, #100
+    udiv x3, x20, x2
+    msub x20, x3, x2, x20
+    add x3, x3, #48
+    strb w3, [x1]
+
+    // Tens
+    mov x2, #10
+    udiv x3, x20, x2
+    msub x20, x3, x2, x20
+    add x3, x3, #48
+    strb w3, [x1, #1]
+
+    // Units
+    add x3, x20, #48
+    strb w3, [x1, #2]
+
+    // Null-terminator
+    mov w3, #0
+    strb w3, [x1, #3]      // <- Terminación del string
+
+    // Syscall
+    mov x0, #1
+    mov x2, #3             // aún puedes usar 3 bytes si lo prefieres
+    mov w8, #64
+    svc #0
+
+    add sp, sp, #16
+    ret
+`,
+
 	"print_float": `.p2align 2
 //--------------------------------------------------------------
 // print_float - Prints a float64 with 3 decimal places
@@ -170,25 +209,32 @@ print_float:
     stp x19, x20, [sp, #-16]!
     stp x21, x22, [sp, #-16]!
 
+    // Copia original
     fmov d1, d0
-    fcvtzs x0, d0
+
+    // Parte entera (redondeada hacia cero)
+    frintz d2, d0
+    fcvtzs x0, d2  // Convierte double a entero con redondeo hacia cero
     bl print_integer
 
+    // Imprime punto decimal
     mov x0, #1
     ldr x1, =dot_char
     mov x2, #1
     mov w8, #64
     svc #0
 
-    scvtf d2, x0
+    // Parte fraccionaria = d1 - d2
     fsub d3, d1, d2
 
+    // Multiplica por 1000.0 para obtener 3 decimales
     ldr x19, =float1000
     ldr d4, [x19]
     fmul d5, d3, d4
 
-    fcvtzu x0, d5
-    bl print_integer
+    // Convierte a entero (sin signo)
+    fcvtzu x20, d5
+    bl print_3digit_integer
 
     ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
