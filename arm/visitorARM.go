@@ -234,6 +234,7 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 
 		default:
 			fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
+			v.Generator.Comment("Tipo no reconocido, omitiendo impresión")
 		}
 
 		// Agrega espacio si no es el último parámetro
@@ -256,6 +257,7 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 
 	return nil
 }
+
 
 
 
@@ -412,27 +414,51 @@ func (v *ArmVisitor) VisitValorexpr(ctx *parser.ValorexprContext) interface{} {
 }
 
 
-
 func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
-    fmt.Println("➕➖ VisitSumres")
+	fmt.Println("➕➖ VisitSumres")
 
-    left := v.Visit(ctx.GetChild(0).(antlr.ParseTree)).(string)
-    right := v.Visit(ctx.GetChild(2).(antlr.ParseTree)).(string)
-    result := v.Generator.NextTempReg()
+	left := v.Visit(ctx.Expresion(0))
+	right := v.Visit(ctx.Expresion(1))
+	op := ctx.GetOp().GetText()
 
-    switch ctx.GetOp().GetText() {
-    case "+":
-        v.Generator.Comment(fmt.Sprintf("Suma: %s + %s", left, right))
-        Add(v.Generator, result, left, right)
-    case "-":
-        v.Generator.Comment(fmt.Sprintf("Resta: %s - %s", left, right))
-        Sub(v.Generator, result, left, right)
-    default:
-        fmt.Println("⚠️ Operador desconocido en sumres:", ctx.GetOp().GetText())
-    }
+	switch l := left.(type) {
 
-    return result
+	case string: // Entero (registro)
+		if r, ok := right.(string); ok {
+			result := v.Generator.NextTempReg()
+			if op == "+" {
+				v.Generator.Comment("Suma de enteros")
+				Add(v.Generator, result, l, r)
+			} else {
+				v.Generator.Comment("Resta de enteros")
+				Sub(v.Generator, result, l, r)
+			}
+			return result
+		}
+
+	case ArmString:
+		if r, ok := right.(ArmString); ok && op == "+" {
+			// Accede al contenido real desde StringData
+			leftContent := v.Generator.StringData[l.Label]
+			rightContent := v.Generator.StringData[r.Label]
+			content := leftContent + rightContent
+
+			label := v.Generator.GenerateStringLabel()
+			v.Generator.AddData(label, content)
+
+			reg := v.Generator.NextTempReg()
+			v.Generator.Add(fmt.Sprintf("ADR %s, %s", reg, label))
+
+			return ArmString{Reg: reg, Label: label}
+		}
+
+	default:
+		fmt.Println("⚠️ Tipos no soportados para suma:", fmt.Sprintf("%T + %T", left, right))
+	}
+
+	return nil
 }
+
 
 
 func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} {
