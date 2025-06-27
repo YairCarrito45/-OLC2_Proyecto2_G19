@@ -1,18 +1,27 @@
 package arm
 
 import (
-	"fmt"
 	parser "compiler/parser"
+	"fmt"
+
+
+
 	"github.com/antlr4-go/antlr/v4"
-    
 )
+
+type ArmString struct {
+    Reg   string
+    Label string
+}
 
 // ArmVisitor recorre el árbol de análisis y genera código ARM64.
 type ArmVisitor struct {
 	parser.BaseVlangVisitor
-	Generator   *ArmGenerator
-	LastResult  string // ← agrega esto
+	Generator  *ArmGenerator
+	LastResult string
+	StringData map[string]string
 }
+
 
 // NewArmVisitor construye un nuevo visitor para generación ARM.
 func NewArmVisitor() *ArmVisitor {
@@ -29,6 +38,9 @@ func NewArmVisitor() *ArmVisitor {
 
 	}
 }
+
+
+
 
 func (g *ArmGenerator) NextTempReg() string {
 	reg := g.tempRegs[g.tempIndex]
@@ -107,8 +119,6 @@ func (v *ArmVisitor) VisitPrograma(ctx *parser.ProgramaContext) interface{} {
 
 
 
-
-
 // VisitValorEntero genera código para una literal entera.
 func (v *ArmVisitor) VisitValorEntero(ctx *parser.ValorEnteroContext) interface{} {
     fmt.Println("🔢 Visitando valor arm entero:", ctx.GetText())
@@ -122,31 +132,115 @@ func (v *ArmVisitor) VisitValorEntero(ctx *parser.ValorEnteroContext) interface{
 }
 
 
+func (v *ArmVisitor) VisitValorDecimal(ctx *parser.ValorDecimalContext) interface{} {
+	text := ctx.DECIMAL().GetText()
+	label := v.Generator.GenerateStringLabel()
+	v.Generator.AddData(label, text)
+
+	reg := v.Generator.NextTempReg()
+	v.Generator.Comment(fmt.Sprintf("Decimal como cadena literal: %s", text))
+	v.Generator.Add(fmt.Sprintf("ADR %s, %s", reg, label))
+
+	v.Generator.StdLib.Use("print_string")
+	return ArmString{Reg: reg, Label: label}
+}
+
+
+func (v *ArmVisitor) VisitValorCadena(ctx *parser.ValorCadenaContext) interface{} {
+	text := ctx.CADENA().GetText()        // Incluye comillas: "hola"
+	clean := text[1 : len(text)-1]        // Elimina las comillas
+
+	label := v.Generator.GenerateStringLabel()
+	v.Generator.AddData(label, clean)
+
+	reg := v.Generator.NextTempReg()
+	v.Generator.Comment(fmt.Sprintf("Cadena literal: %q", clean))
+	v.Generator.Add(fmt.Sprintf("ADR %s, %s", reg, label)) // ✅ Cambio aquí
+
+	v.Generator.StdLib.Use("print_string") // asegura inclusión en ensamblado
+
+	return ArmString{Reg: reg, Label: label}
+}
+
+
+
+
+
+
+
+
+func (v *ArmVisitor) VisitValorBooleano(ctx *parser.ValorBooleanoContext) interface{} {
+	text := ctx.BOOLEANO().GetText() // "true" o "false"
+
+	// Crear etiqueta de string en .data
+	label := v.Generator.GenerateStringLabel()
+	v.Generator.AddData(label, text)
+
+	// Registrar uso de print_string
+	v.Generator.StdLib.Use("print_string")
+
+	// Preparar registro con dirección del string
+	reg := v.Generator.NextTempReg()
+	v.Generator.Comment(fmt.Sprintf("Booleano literal: %s", text))
+	v.Generator.Add(fmt.Sprintf("ADR %s, %s", reg, label))
+
+	return ArmString{Reg: reg, Label: label}
+}
+
+
+
+func (v *ArmVisitor) VisitValorCaracter(ctx *parser.ValorCaracterContext) interface{} {
+	text := ctx.CARACTER().GetText() // e.g. `'a'`
+	if len(text) < 3 {
+		fmt.Println("⚠️ Carácter inválido:", text)
+		return nil
+	}
+
+	char := rune(text[1])
+	reg := v.Generator.NextTempReg()
+	v.Generator.Comment(fmt.Sprintf("Carácter '%c' ASCII=%d", char, char))
+	v.Generator.Add(fmt.Sprintf("MOV %s, #%d", reg, char))
+	return reg
+}
+
+
+
 // VisitPrintStatement traduce una instrucción println(...).
 func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) interface{} {
-    fmt.Println("🖨️ VisitPrintStatement ARM")
+	fmt.Println("🖨️ VisitPrintStatement ARM")
 
-    if ctx.Parametros() == nil || len(ctx.Parametros().AllExpresion()) == 0 {
-        return nil
-    }
+	if ctx.Parametros() == nil || len(ctx.Parametros().AllExpresion()) == 0 {
+		return nil
+	}
 
-    expr := ctx.Parametros().AllExpresion()[0]
-    fmt.Println("Nodo expresión:", expr.GetText(), "Tipo:", fmt.Sprintf("%T", expr))
-    
-    val := v.Visit(expr)
-    fmt.Println("Valor devuelto por expresión:", val, "Tipo:", fmt.Sprintf("%T", val))
+	expr := ctx.Parametros().AllExpresion()[0]
+	val := v.Visit(expr)
 
-    reg, ok := val.(string)
-    if !ok {
-        fmt.Println("⚠️ No se pudo obtener el registro temporal para impresión. Tipo:", fmt.Sprintf("%T", val))
-        return nil
-    }
+	switch value := val.(type) {
+	case string:
+		v.Generator.Comment("Print entero")
+		PrintInteger(v.Generator, value)
 
-    v.Generator.Comment("Print statement")
-    PrintInteger(v.Generator, reg) // ✅ Usa función reutilizable
+	case ArmString:
+		v.Generator.Comment("Print cadena")
+		v.Generator.Add(fmt.Sprintf("MOV X0, %s", value.Reg))
+		v.Generator.Add("BL print_string")
 
-    return nil
+	default:
+		fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
+	}
+
+	// 🔽 Agrega esto al final para salto de línea
+	v.Generator.Comment("Salto de línea después de println")
+	label := v.Generator.GenerateStringLabel()
+	v.Generator.AddData(label, "\n") // añade "\n" como literal
+	v.Generator.Add(fmt.Sprintf("ADR x1, %s", label))
+	v.Generator.Add("MOV X0, x1")
+	v.Generator.Add("BL print_string")
+
+	return nil
 }
+
 
 
 

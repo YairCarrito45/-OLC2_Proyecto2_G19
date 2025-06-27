@@ -1,5 +1,16 @@
 package arm
 
+import "fmt"
+
+
+
+func PrintString(g *ArmGenerator, reg string) {
+	g.StdLib.Use("print_string")
+	g.Add(fmt.Sprintf("MOV X0, %s", reg))
+	g.Add("BL print_string")
+}
+
+
 // General purpose registers
 const (
 	X0  = "x0"

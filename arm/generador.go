@@ -17,7 +17,25 @@ type ArmGenerator struct {
 
 	tempRegs  []string
 	tempIndex int
+	StringData   map[string]string // ← asegúrate de que esto esté definido
 }
+
+var stringLabelCounter = 0
+
+func (g *ArmGenerator) GenerateStringLabel() string {
+	label := fmt.Sprintf(".str_%d", stringLabelCounter)
+	stringLabelCounter++
+	return label
+}
+
+func (g *ArmGenerator) AddData(label string, content string) {
+	if g.StringData == nil {
+		g.StringData = make(map[string]string)
+	}
+
+	g.StringData[label] = content
+}
+
 
 
 
@@ -103,12 +121,6 @@ func Add(g *ArmGenerator, rd, rs1, rs2 string) {
 	g.Add(fmt.Sprintf("ADD %s, %s, %s", rd, rs1, rs2))
 }
 
-func EndProgram(g *ArmGenerator) {
-	g.StdLib.Use("end_program")
-	g.Add("MOV X0, 0")  // Exit code 0
-	g.Add("MOV X8, 93") // Syscall number for exit
-	g.Add("SVC #0")     // Make syscall
-}
 
 /*
 Impresion de las cosas
@@ -120,23 +132,11 @@ func PrintInteger(g *ArmGenerator, rs string) {
 	g.Add("BL print_integer")
 }
 
-func (g *ArmGenerator) String() {
-	// Iniciar el codigo
-	result := ".text\n.global _start:\n"
 
-	// Agregar instrucciones
-	for _, instruction := range g.Instructions {
-		result += instruction + "\n"
-	}
-
-	// Agregar la biblioteca estándar
-	result += "\n\n\n// Standard Library\n"
-	result += NewStandardLibrary().GetFunctionDefinitions()
-
-	// lo agregamos a consola
-	g.Output = result
-	fmt.Println(result) // Imprimir el resultado en consola
+func (g *ArmGenerator) String() string {
+	return g.GetFullCode()
 }
+
 
 /*
 Funcion para terminar el programa
@@ -157,5 +157,25 @@ _start:
     mov x8, #93
     svc #0
 `
-	return header + "\n" + g.GetOutput() + "\n\n" + g.StdLib.GetFunctionDefinitions()
+
+	textSection := g.GetOutput()
+	libFunctions := g.StdLib.GetFunctionDefinitions()
+
+	dataSection := ""
+	if len(g.StringData) > 0 {
+		dataSection += "\n.section .data\n"
+		for label, content := range g.StringData {
+			escaped := strings.ReplaceAll(content, `\`, `\\`)
+			escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+			escaped = strings.ReplaceAll(escaped, "\n", `\n`)
+			escaped = strings.ReplaceAll(escaped, "\t", `\t`)
+			dataSection += fmt.Sprintf("%s:\n\t.asciz \"%s\"\n", label, escaped)
+		}
+	}
+
+	// 🔁 Mueve funciones justo después del código principal
+	return header + "\n" + textSection + "\n\n" + libFunctions + "\n" + dataSection
 }
+
+
+
