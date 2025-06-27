@@ -3,6 +3,8 @@ package arm
 import (
 	parser "compiler/parser"
 	"fmt"
+	"strconv"
+
 	"github.com/antlr4-go/antlr/v4"
 )
 
@@ -10,6 +12,11 @@ type ArmString struct {
     Reg   string
     Label string
 }
+
+type FloatReg struct {
+    Reg string // e.g., "v1"
+}
+
 
 // ArmVisitor recorre el árbol de análisis y genera código ARM64.
 type ArmVisitor struct {
@@ -136,18 +143,27 @@ func (v *ArmVisitor) VisitValorEntero(ctx *parser.ValorEnteroContext) interface{
 }
 
 
+
 func (v *ArmVisitor) VisitValorDecimal(ctx *parser.ValorDecimalContext) interface{} {
 	text := ctx.DECIMAL().GetText()
-	label := v.Generator.GenerateStringLabel()
-	v.Generator.AddData(label, text)
+	val, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		fmt.Println("⚠️ Error al convertir decimal:", text)
+		return nil
+	}
 
-	reg := v.Generator.NextTempReg()
-	v.Generator.Comment(fmt.Sprintf("Decimal como cadena literal: %s", text))
-	v.Generator.Add(fmt.Sprintf("ADR %s, %s", reg, label))
+	label := v.Generator.GenerateStringLabel() // Etiqueta única
+	v.Generator.AddDataDouble(label, val)      // Agrega .double a .data
 
-	v.Generator.StdLib.Use("print_string")
-	return ArmString{Reg: reg, Label: label}
+	v.Generator.Comment(fmt.Sprintf("Carga decimal %f desde memoria", val))
+	v.Generator.Add(fmt.Sprintf("ADR x1, %s", label)) // Dirección a x1
+	v.Generator.Add("LDR d0, [x1]")                   // Carga double desde memoria
+
+	return FloatReg{Reg: "d0"}
 }
+
+
+
 
 
 func (v *ArmVisitor) VisitValorCadena(ctx *parser.ValorCadenaContext) interface{} {
@@ -232,6 +248,14 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 			v.Generator.Add(fmt.Sprintf("MOV X0, %s", value.Reg))
 			v.Generator.Add("BL print_string")
 
+		case FloatReg:
+			v.Generator.Comment("Print float64")
+
+
+			v.Generator.StdLib.Use("print_float")
+			v.Generator.Add(fmt.Sprintf("FMOV D0, %s", value.Reg))
+			v.Generator.Add("BL print_float")
+
 		default:
 			fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
 			v.Generator.Comment("Tipo no reconocido, omitiendo impresión")
@@ -247,7 +271,7 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 		}
 	}
 
-	// Salto de línea al final
+	// Salto de línea después de println
 	v.Generator.Comment("Salto de línea después de println")
 	nlLabel := v.Generator.GenerateStringLabel()
 	v.Generator.AddData(nlLabel, "\n")
@@ -423,8 +447,10 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 
 	switch l := left.(type) {
 
-	case string: // Entero (registro)
-		if r, ok := right.(string); ok {
+	// ➕ int + int
+	case string:
+		switch r := right.(type) {
+		case string:
 			result := v.Generator.NextTempReg()
 			if op == "+" {
 				v.Generator.Comment("Suma de enteros")
@@ -434,11 +460,46 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 				Sub(v.Generator, result, l, r)
 			}
 			return result
+
+		case FloatReg:
+			tmpFloat := fmt.Sprintf("d%d", v.Generator.tempIndex)
+			v.Generator.tempIndex++
+			v.Generator.Comment("Convierte int a float64")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, l))
+
+			result := fmt.Sprintf("d%d", v.Generator.tempIndex)
+			v.Generator.tempIndex++
+			v.Generator.Comment("Suma int + float")
+			v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, tmpFloat, r.Reg))
+			return FloatReg{Reg: result}
 		}
 
+	// ➕ float + ...
+	case FloatReg:
+		switch r := right.(type) {
+		case FloatReg:
+			result := fmt.Sprintf("d%d", v.Generator.tempIndex)
+			v.Generator.tempIndex++
+			v.Generator.Comment("Suma de float64")
+			v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, l.Reg, r.Reg))
+			return FloatReg{Reg: result}
+
+		case string:
+			tmpFloat := fmt.Sprintf("d%d", v.Generator.tempIndex)
+			v.Generator.tempIndex++
+			v.Generator.Comment("Convierte int a float64")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, r))
+
+			result := fmt.Sprintf("d%d", v.Generator.tempIndex)
+			v.Generator.tempIndex++
+			v.Generator.Comment("Suma float + int")
+			v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, l.Reg, tmpFloat))
+			return FloatReg{Reg: result}
+		}
+
+	// ➕ string + string
 	case ArmString:
 		if r, ok := right.(ArmString); ok && op == "+" {
-			// Accede al contenido real desde StringData
 			leftContent := v.Generator.StringData[l.Label]
 			rightContent := v.Generator.StringData[r.Label]
 			content := leftContent + rightContent
@@ -451,13 +512,13 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 
 			return ArmString{Reg: reg, Label: label}
 		}
-
-	default:
-		fmt.Println("⚠️ Tipos no soportados para suma:", fmt.Sprintf("%T + %T", left, right))
 	}
 
+	// ⚠️ Caso no soportado
+	fmt.Println("⚠️ Tipos no soportados para suma:", fmt.Sprintf("%T + %T", left, right))
 	return nil
 }
+
 
 
 

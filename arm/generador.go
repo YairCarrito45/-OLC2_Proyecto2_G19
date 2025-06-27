@@ -18,6 +18,8 @@ type ArmGenerator struct {
 	tempRegs    []string
 	tempIndex   int
 	StringData  map[string]string
+	DataSection []string
+
 }
 
 
@@ -41,6 +43,20 @@ func (g *ArmGenerator) AddData(label string, content string) {
 	}
 
 	g.StringData[label] = content
+}
+
+
+func (g *ArmGenerator) AddDataDouble(label string, value float64) {
+	// Verifica si la constante ya fue registrada
+	for _, line := range g.DataSection {
+		if strings.HasPrefix(line, label+":") {
+			return
+		}
+	}
+	// Asegura alineación adecuada para .double (8 bytes)
+	g.DataSection = append(g.DataSection,
+		fmt.Sprintf(".p2align 3\n%s:\n    .double %f", label, value),
+	)
 }
 
 
@@ -158,7 +174,6 @@ func (g *ArmGenerator) GetOutput() string {
 	return strings.Join(g.Instructions, "\n")
 }
 
-
 func (g *ArmGenerator) GetFullCode() string {
 	header := `.global _start
 .section .text
@@ -172,8 +187,10 @@ _start:
 	libFunctions := g.StdLib.GetFunctionDefinitions()
 
 	dataSection := ""
-	if len(g.StringData) > 0 {
+	if len(g.StringData) > 0 || len(g.DataSection) > 0 || g.StdLib.IsUsed("print_float") {
 		dataSection += "\n.section .data\n"
+
+		// Agrega strings
 		for label, content := range g.StringData {
 			escaped := strings.ReplaceAll(content, `\`, `\\`)
 			escaped = strings.ReplaceAll(escaped, `"`, `\"`)
@@ -181,11 +198,21 @@ _start:
 			escaped = strings.ReplaceAll(escaped, "\t", `\t`)
 			dataSection += fmt.Sprintf("%s:\n\t.asciz \"%s\"\n", label, escaped)
 		}
+
+		// Agrega constantes double con alineación
+		if len(g.DataSection) > 0 {
+			dataSection += ".p2align 3\n"
+			for _, line := range g.DataSection {
+				dataSection += line + "\n"
+			}
+		}
+
+		// Si se usó print_float, incluir dot_char y float1000
+		if g.StdLib.IsUsed("print_float") {
+			dataSection += ".p2align 2\ndot_char:\n\t.asciz \".\"\n"
+			dataSection += ".p2align 3\nfloat1000:\n\t.double 1000.0\n"
+		}
 	}
 
-	// 🔁 Mueve funciones justo después del código principal
 	return header + "\n" + textSection + "\n\n" + libFunctions + "\n" + dataSection
 }
-
-
-

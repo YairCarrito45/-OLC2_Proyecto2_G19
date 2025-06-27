@@ -329,6 +329,11 @@ a.Settings().SetTheme(DarkMonoTheme{})
 		fmt.Println("🚀 Iniciando generación ARM")
 		armVisitor := arm.NewArmVisitor()
 		armVisitor.Visit(tree)
+		// Fuerza inclusión explícita por seguridad
+		armVisitor.Generator.StdLib.Use("print_integer")
+		armVisitor.Generator.StdLib.Use("print_string")
+		armVisitor.Generator.StdLib.Use("print_float")
+
 		fmt.Println("✅ Finalizó generación ARM")
 
 		armFullCode := armVisitor.Generator.GetFullCode()
