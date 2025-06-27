@@ -823,3 +823,58 @@ func (v *ArmVisitor) VisitAsignacionCompuestaResta(ctx *parser.AsignacionCompues
 
 	return nil
 }
+
+
+
+// visit de operaciones comparativas
+func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
+	left := v.Visit(ctx.Expresion(0))
+	right := v.Visit(ctx.Expresion(1))
+	op := ctx.GetOp().GetText() // "==" o "!="
+
+	var resultReg = v.Generator.NextTempReg()
+	v.Generator.Comment(fmt.Sprintf("Comparación %s", op))
+
+	switch l := left.(type) {
+
+	// Comparación de enteros
+	case string:
+		if r, ok := right.(string); ok {
+			v.Generator.Add(fmt.Sprintf("CMP %s, %s", l, r))
+			if op == "==" {
+				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
+			} else {
+				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
+			}
+			return resultReg
+		}
+
+	// Comparación de floats
+	case FloatReg:
+		if r, ok := right.(FloatReg); ok {
+			v.Generator.Add(fmt.Sprintf("FCMP %s, %s", l.Reg, r.Reg))
+			if op == "==" {
+				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
+			} else {
+				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
+			}
+			return resultReg
+		}
+
+	// Comparación de strings (por dirección de memoria)
+	case ArmString:
+		if r, ok := right.(ArmString); ok {
+			v.Generator.Add(fmt.Sprintf("CMP %s, %s", l.Reg, r.Reg))
+			if op == "==" {
+				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
+			} else {
+				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
+			}
+			return resultReg
+		}
+	}
+
+	v.Generator.Comment("❌ Tipos incompatibles en comparación")
+	return nil
+}
+

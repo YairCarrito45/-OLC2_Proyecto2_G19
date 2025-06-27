@@ -20,6 +20,7 @@ type ArmGenerator struct {
 	StringData  map[string]string
 	DataSection []string
 	tempFloatIndex int // inicializado en 0
+	
 
 
 }
