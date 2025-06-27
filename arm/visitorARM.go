@@ -59,6 +59,12 @@ func (g *ArmGenerator) NextTempReg() string {
 	return reg
 }
 
+func (g *ArmGenerator) NextTempFloatReg() string {
+	reg := fmt.Sprintf("d%d", g.tempFloatIndex)
+	g.tempFloatIndex = (g.tempFloatIndex + 1) % 8 // usa 8 registros por ejemplo
+	return reg
+}
+
 
 // Visit permite que ArmVisitor recorra cualquier árbol ANTLR.
 func (v *ArmVisitor) Visit(tree antlr.ParseTree) interface{} {
@@ -437,7 +443,6 @@ func (v *ArmVisitor) VisitValorexpr(ctx *parser.ValorexprContext) interface{} {
 	return nil
 }
 
-
 func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 	fmt.Println("➕➖ VisitSumres")
 
@@ -451,6 +456,7 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 	case string:
 		switch r := right.(type) {
 		case string:
+			fmt.Printf("🧮 %s %s %s (int)\n", l, op, r)
 			result := v.Generator.NextTempReg()
 			if op == "+" {
 				v.Generator.Comment("Suma de enteros")
@@ -462,14 +468,13 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 			return result
 
 		case FloatReg:
-			tmpFloat := fmt.Sprintf("d%d", v.Generator.tempIndex)
-			v.Generator.tempIndex++
+			fmt.Printf("🧮 %s %s %s (int y float)\n", l, op, r.Reg)
+			tmpFloat := v.Generator.NextTempFloatReg()
 			v.Generator.Comment("Convierte int a float64")
 			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, l))
 
-			result := fmt.Sprintf("d%d", v.Generator.tempIndex)
-			v.Generator.tempIndex++
-			v.Generator.Comment("Suma int + float")
+			result := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Suma/Resta int y float")
 			if op == "+" {
 				v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, tmpFloat, r.Reg))
 			} else {
@@ -482,8 +487,8 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 	case FloatReg:
 		switch r := right.(type) {
 		case FloatReg:
-			result := fmt.Sprintf("d%d", v.Generator.tempIndex)
-			v.Generator.tempIndex++
+			fmt.Printf("🧮 %s %s %s (float)\n", l.Reg, op, r.Reg)
+			result := v.Generator.NextTempFloatReg()
 			v.Generator.Comment("Suma/Resta de float64")
 			if op == "+" {
 				v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, l.Reg, r.Reg))
@@ -493,14 +498,13 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 			return FloatReg{Reg: result}
 
 		case string:
-			tmpFloat := fmt.Sprintf("d%d", v.Generator.tempIndex)
-			v.Generator.tempIndex++
+			fmt.Printf("🧮 %s %s %s (float y int)\n", l.Reg, op, r)
+			tmpFloat := v.Generator.NextTempFloatReg()
 			v.Generator.Comment("Convierte int a float64")
 			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, r))
 
-			result := fmt.Sprintf("d%d", v.Generator.tempIndex)
-			v.Generator.tempIndex++
-			v.Generator.Comment("Suma/Resta float + int")
+			result := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Suma/Resta float y int")
 			if op == "+" {
 				v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, l.Reg, tmpFloat))
 			} else {
@@ -512,6 +516,7 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 	// string + string (concatenación)
 	case ArmString:
 		if r, ok := right.(ArmString); ok && op == "+" {
+			fmt.Printf("🧮 \"%s\" + \"%s\" (concatenación)\n", l.Label, r.Label)
 			leftContent := v.Generator.StringData[l.Label]
 			rightContent := v.Generator.StringData[r.Label]
 			content := leftContent + rightContent
@@ -527,9 +532,10 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 	}
 
 	// ⚠️ Caso no soportado
-	fmt.Println("⚠️ Tipos no soportados para suma:", fmt.Sprintf("%T + %T", left, right))
+	fmt.Printf("⚠️ Tipos no soportados para suma o resta: %T %s %T\n", left, op, right)
 	return nil
 }
+
 
 
 
