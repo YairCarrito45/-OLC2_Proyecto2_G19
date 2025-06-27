@@ -189,6 +189,11 @@ func (v *ArmVisitor) VisitValorCadena(ctx *parser.ValorCadenaContext) interface{
 }
 
 
+/// visit para controlar parentesis
+func (v *ArmVisitor) VisitParentesisexpre(ctx *parser.ParentesisexpreContext) interface{} {
+	// Simplemente visita la expresión interna, conserva su tipo y resultado
+	return v.Visit(ctx.Expresion())
+}
 
 
 
@@ -213,6 +218,37 @@ func (v *ArmVisitor) VisitValorBooleano(ctx *parser.ValorBooleanoContext) interf
 	return ArmString{Reg: reg, Label: label}
 }
 
+func (v *ArmVisitor) VisitUnario(ctx *parser.UnarioContext) interface{} {
+	fmt.Println("➖ VisitUnario")
+
+	// Detecta si es negación unaria (-) o not (!)
+	op := ctx.GetOp().GetText()
+	val := v.Visit(ctx.Expresion())
+
+	switch op {
+	case "-":
+		switch t := val.(type) {
+		case string: // entero
+			result := v.Generator.NextTempReg()
+			v.Generator.Comment("Negación unaria de entero")
+			v.Generator.Add(fmt.Sprintf("NEG %s, %s", result, t))
+			return result
+
+		case FloatReg: // float
+			result := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Negación unaria de float64")
+			v.Generator.Add(fmt.Sprintf("FNEG %s, %s", result, t.Reg))
+			return FloatReg{Reg: result}
+		}
+
+	case "!":
+		// Si deseas implementar lógica booleana luego
+		v.Generator.Comment("Negación lógica booleana (no implementada)")
+	}
+
+	fmt.Println("⚠️ Tipo o operador no compatible en negación unaria:", op)
+	return nil
+}
 
 
 func (v *ArmVisitor) VisitValorCaracter(ctx *parser.ValorCaracterContext) interface{} {
