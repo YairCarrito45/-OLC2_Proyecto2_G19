@@ -14,10 +14,10 @@ fn main() {
     mut texto string := "Hola!"
     mut booleano bool := true
 
-    printlnln("\n\n###Validacion Manual")
+    println("\n\n###Validacion Manual")
     println("entero:", entero)
     println("decimal:", decimal)
-    println("texto:", texto);
+    println("texto:", texto)
     println("booleano:", booleano)
     println("")
 

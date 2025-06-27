@@ -219,7 +219,7 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 
 	exprs := ctx.Parametros().AllExpresion()
 
-	for _, expr := range exprs {
+	for i, expr := range exprs {
 		val := v.Visit(expr)
 
 		switch value := val.(type) {
@@ -235,19 +235,27 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 		default:
 			fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
 		}
+
+		// Agrega espacio si no es el último parámetro
+		if i < len(exprs)-1 {
+			spaceLabel := v.Generator.GenerateStringLabel()
+			v.Generator.AddData(spaceLabel, " ")
+			v.Generator.Add(fmt.Sprintf("ADR x1, %s", spaceLabel))
+			v.Generator.Add("MOV X0, x1")
+			v.Generator.Add("BL print_string")
+		}
 	}
 
-	// Agrega salto de línea al final
+	// Salto de línea al final
 	v.Generator.Comment("Salto de línea después de println")
-	label := v.Generator.GenerateStringLabel()
-	v.Generator.AddData(label, "\n")
-	v.Generator.Add(fmt.Sprintf("ADR x1, %s", label))
+	nlLabel := v.Generator.GenerateStringLabel()
+	v.Generator.AddData(nlLabel, "\n")
+	v.Generator.Add(fmt.Sprintf("ADR x1, %s", nlLabel))
 	v.Generator.Add("MOV X0, x1")
 	v.Generator.Add("BL print_string")
 
 	return nil
 }
-
 
 
 
