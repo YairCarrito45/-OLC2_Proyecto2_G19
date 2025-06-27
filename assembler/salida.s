@@ -6,57 +6,22 @@ _start:
     svc #0
 
 main:
-# Literal entero: 3
-MOV x1, #3
-# Literal entero: 1
-MOV x2, #1
-# Literal entero: 3
-MOV x3, #3
-# Suma de enteros
-ADD x4, x2, x3
-# Literal entero: 32
-MOV x1, #32
-# Multiplicación de enteros
-MUL x2, x4, x1
-# Literal entero: 90
-MOV x3, #90
-# División de enteros
-UDIV x4, x2, x3
-# Resta de enteros
-SUB x1, x1, x4
+# Literal entero: 10
+MOV x1, #10
+STR x1, [SP, #0]
+# Variable x inicializada con valor en x1
+# Literal entero: 5
+MOV x2, #5
+LDR x3, [SP, #0]
+ADD x4, x3, x2
+STR x4, [SP, #0]
+# Accediendo variable x
+LDR x1, [SP, #0]
 # Print entero
 MOV X0, x1
 BL print_integer
 # Salto de línea después de println
 ADR x1, .str_0
-MOV X0, x1
-BL print_string
-# Literal entero: 1
-MOV x2, #1
-# Literal entero: 1
-MOV x3, #1
-# Suma de enteros
-ADD x4, x2, x3
-# Negación unaria de entero
-NEG x1, x4
-# Print entero
-MOV X0, x1
-BL print_integer
-# Salto de línea después de println
-ADR x1, .str_1
-MOV X0, x1
-BL print_string
-# Literal entero: 20
-MOV x2, #20
-# Negación unaria de entero
-NEG x3, x2
-# Negación unaria de entero
-NEG x4, x3
-# Print entero
-MOV X0, x4
-BL print_integer
-# Salto de línea después de println
-ADR x1, .str_2
 MOV X0, x1
 BL print_string
 RET
@@ -263,10 +228,6 @@ print_3digit_integer:
 
 .section .data
 .str_0:
-	.asciz "\n"
-.str_1:
-	.asciz "\n"
-.str_2:
 	.asciz "\n"
 .p2align 2
 dot_char:

@@ -17,6 +17,15 @@ type FloatReg struct {
     Reg string // e.g., "v1"
 }
 
+type TypedValue struct {
+	Reg  string // puede ser xN o dN
+	Type string // "int", "float64", "string", etc.
+}
+
+type Symbol struct {
+	Name string // nombre del registro o label asociado
+	Type string // "int", "float64", "string", etc.
+}
 
 // ArmVisitor recorre el árbol de análisis y genera código ARM64.
 type ArmVisitor struct {
@@ -666,5 +675,65 @@ func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} 
 	}
 
 	fmt.Println("⚠️ Tipos no compatibles en multiplicación/división")
+	return nil
+}
+
+
+
+// asignacion compuesta suma (incremento)
+func (v *ArmVisitor) VisitAsignacionCompuestaSuma(ctx *parser.AsignacionCompuestaSumaContext) interface{} {
+	id := ctx.ID().GetText()
+	right := v.Visit(ctx.Expresion())
+
+	// Obtener tipo y dirección
+	symInfo, ok := v.Generator.Variables[id]
+	if !ok {
+		v.Generator.Comment(fmt.Sprintf("❌ Variable '%s' no declarada", id))
+		return nil
+	}
+
+	switch symInfo.Type {
+	case "int":
+		rightReg, ok := right.(string)
+		if !ok {
+			v.Generator.Comment("❌ Incompatibilidad de tipo en += int")
+			return nil
+		}
+		current := v.Generator.NextTempReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", current, symInfo.Location))
+		result := v.Generator.NextTempReg()
+		v.Generator.Add(fmt.Sprintf("ADD %s, %s, %s", result, current, rightReg))
+		v.Generator.Add(fmt.Sprintf("STR %s, %s", result, symInfo.Location))
+
+	case "float64":
+		rightF, ok := right.(FloatReg)
+		if !ok {
+			v.Generator.Comment("❌ Incompatibilidad de tipo en += float64")
+			return nil
+		}
+		tmp := v.Generator.NextTempReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", tmp, symInfo.Location))
+		current := v.Generator.NextTempFloatReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, [%s]", current, tmp))
+		result := v.Generator.NextTempFloatReg()
+		v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, current, rightF.Reg))
+		v.Generator.Add(fmt.Sprintf("STR %s, [%s]", result, tmp))
+
+	case "string":
+		rightStr, ok := right.(ArmString)
+		if !ok {
+			v.Generator.Comment("❌ Incompatibilidad de tipo en += string")
+			return nil
+		}
+		v.Generator.StdLib.Use("concat_strings")
+		v.Generator.Add(fmt.Sprintf("MOV X0, %s", symInfo.Location)) // ❓ Si Location es dirección de string
+		v.Generator.Add(fmt.Sprintf("MOV X1, %s", rightStr.Reg))
+		v.Generator.Add("BL concat_strings")
+		// X0 tiene el resultado, si quieres puedes guardarlo en una nueva dirección o actualizar la existente
+
+	default:
+		v.Generator.Comment("❌ Tipo no soportado en '+='")
+	}
+
 	return nil
 }
