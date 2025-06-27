@@ -6,11 +6,11 @@ _start:
     svc #0
 
 main:
-# Carga decimal 1.500000 desde memoria
+# Carga decimal 4.600000 desde memoria
 ADR x1, .str_0
 LDR d0, [x1]
-# Literal entero: 4
-MOV x1, #4
+# Literal entero: 1
+MOV x1, #1
 # Convierte int a float64
 SCVTF d1, x1
 # Suma/Resta float + int
@@ -22,37 +22,22 @@ BL print_float
 ADR x1, .str_1
 MOV X0, x1
 BL print_string
+# Carga decimal 1.500000 desde memoria
+ADR x1, .str_2
+LDR d0, [x1]
+# Carga decimal 1.500000 desde memoria
+ADR x1, .str_3
+LDR d0, [x1]
+# Suma/Resta de float64
+FADD d3, d0, d0
+# Print float64
+FMOV D0, d3
+BL print_float
+# Salto de línea después de println
+ADR x1, .str_4
+MOV X0, x1
+BL print_string
 RET
-
-.p2align 2
-//--------------------------------------------------------------
-// print_string - Prints a null-terminated string to stdout
-//
-// Input:
-//   x0 - Address of the null-terminated string
-//--------------------------------------------------------------
-print_string:
-    stp x29, x30, [sp, #-16]!
-
-    mov x1, x0
-    mov x2, x0
-
-find_length:
-    ldrb w3, [x2]
-    cmp w3, #0
-    beq got_length
-    add x2, x2, #1
-    b find_length
-
-got_length:
-    sub x2, x2, x1
-    mov x8, #64
-    mov x0, #1
-    mov x1, x1
-    svc #0
-
-    ldp x29, x30, [sp], #16
-    ret
 
 .p2align 2
 //--------------------------------------------------------------
@@ -224,12 +209,50 @@ print_result:
 minus_sign:
     .ascii "-"
 
+.p2align 2
+//--------------------------------------------------------------
+// print_string - Prints a null-terminated string to stdout
+//
+// Input:
+//   x0 - Address of the null-terminated string
+//--------------------------------------------------------------
+print_string:
+    stp x29, x30, [sp, #-16]!
+
+    mov x1, x0
+    mov x2, x0
+
+find_length:
+    ldrb w3, [x2]
+    cmp w3, #0
+    beq got_length
+    add x2, x2, #1
+    b find_length
+
+got_length:
+    sub x2, x2, x1
+    mov x8, #64
+    mov x0, #1
+    mov x1, x1
+    svc #0
+
+    ldp x29, x30, [sp], #16
+    ret
+
 .section .data
 .str_1:
+	.asciz "\n"
+.str_4:
 	.asciz "\n"
 .p2align 3
 .p2align 3
 .str_0:
+    .double 4.600000
+.p2align 3
+.str_2:
+    .double 1.500000
+.p2align 3
+.str_3:
     .double 1.500000
 .p2align 2
 dot_char:
