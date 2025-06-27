@@ -386,6 +386,13 @@ func (v *ArmVisitor) VisitFuncion(ctx *parser.FuncionContext) interface{} {
     return nil
 }
 
+var floatLabelCounter int = 0
+
+func (g *ArmGenerator) GenerateConstLabel() string {
+	label := fmt.Sprintf("float_const_%d", floatLabelCounter)
+	floatLabelCounter++
+	return label
+}
 
 
 
@@ -420,10 +427,13 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 		switch value := val.(type) {
 		case string:
 			reg = value
-			tipo = "int" // por defecto, puedes mejorar esto más adelante con análisis semántico
+			tipo = "int"
 		case ArmString:
 			reg = value.Reg
 			tipo = "string"
+		case FloatReg:
+			reg = value.Reg
+			tipo = "float64"
 		default:
 			fmt.Printf("⚠️ Error: expresión no retornó un registro válido para variable '%s'\n", varName)
 			return nil
@@ -432,27 +442,50 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 		v.Generator.Add(fmt.Sprintf("STR %s, %s", reg, memLocation))
 		v.Generator.Comment(fmt.Sprintf("Variable %s inicializada con valor en %s", varName, reg))
 
-		// Guardar tipo y ubicación
 		v.Generator.Variables[varName] = SymbolInfo{
 			Location: memLocation,
 			Type:     tipo,
 		}
 	} else {
-		v.Generator.Add(fmt.Sprintf("MOV %s, #0", X0))
-		v.Generator.Add(fmt.Sprintf("STR %s, %s", X0, memLocation))
-		v.Generator.Comment(fmt.Sprintf("Variable %s declarada sin valor (inicializada en 0)", varName))
+		var tipo string
+		if ctx.Tipo() != nil {
+			tipoTexto := ctx.Tipo().GetText()
+			switch tipoTexto {
+			case "float64":
+				tipo = "float64"
+				label := v.Generator.GenerateConstLabel()
+				v.Generator.AddDataDouble(label, 0.0)
+				v.Generator.Add(fmt.Sprintf("ADR x1, %s", label))
+				v.Generator.Add("LDR d0, [x1]")
+				v.Generator.Add(fmt.Sprintf("STR d0, %s", memLocation))
 
-		// Por defecto, tipo int si no tiene valor inicial
+			case "string":
+				tipo = "string"
+				label := v.Generator.GenerateStringLabel()
+				v.Generator.AddData(label, "")
+				v.Generator.Add(fmt.Sprintf("ADR x1, %s", label))
+				v.Generator.Add(fmt.Sprintf("STR x1, %s", memLocation))
+			default:
+				tipo = "int"
+				v.Generator.Add(fmt.Sprintf("MOV %s, #0", X0))
+				v.Generator.Add(fmt.Sprintf("STR %s, %s", X0, memLocation))
+			}
+		} else {
+			tipo = "int"
+			v.Generator.Add(fmt.Sprintf("MOV %s, #0", X0))
+			v.Generator.Add(fmt.Sprintf("STR %s, %s", X0, memLocation))
+		}
+
+		v.Generator.Comment(fmt.Sprintf("Variable %s declarada sin valor (tipo: %s)", varName, tipo))
 		v.Generator.Variables[varName] = SymbolInfo{
 			Location: memLocation,
-			Type:     "int",
+			Type:     tipo,
 		}
 	}
 
 	v.Generator.VarOffset += 8
 	return nil
 }
-
 
 
 
@@ -464,16 +497,24 @@ func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
 		return nil
 	}
 
-	reg := v.Generator.NextTempReg()
 	v.Generator.Comment(fmt.Sprintf("Accediendo variable %s", varName))
-	v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
 
 	switch info.Type {
-	case "string", "float64", "bool":
-		// Si son valores que se imprimen como cadenas
+	case "float64":
+		// Usa registro flotante
+		reg := v.Generator.NextTempFloatReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
+		return FloatReg{Reg: reg}
+
+	case "string":
+		reg := v.Generator.NextTempReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
 		return ArmString{Reg: reg, Label: ""}
+
 	default:
-		// Enteros, etc.
+		// Asumimos int, bool, etc.
+		reg := v.Generator.NextTempReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
 		return reg
 	}
 }
@@ -733,6 +774,51 @@ func (v *ArmVisitor) VisitAsignacionCompuestaSuma(ctx *parser.AsignacionCompuest
 
 	default:
 		v.Generator.Comment("❌ Tipo no soportado en '+='")
+	}
+
+	return nil
+}
+
+
+
+// asignacion compuesta resta (decremento)
+
+func (v *ArmVisitor) VisitAsignacionCompuestaResta(ctx *parser.AsignacionCompuestaRestaContext) interface{} {
+	id := ctx.ID().GetText()
+	right := v.Visit(ctx.Expresion())
+
+	sym, ok := v.Generator.Variables[id]
+	if !ok {
+		v.Generator.Comment(fmt.Sprintf("❌ Variable '%s' no declarada", id))
+		return nil
+	}
+
+	switch sym.Type {
+	case "int":
+		rightReg, ok := right.(string)
+		if !ok {
+			v.Generator.Comment("❌ Incompatibilidad de tipo en -= int")
+			return nil
+		}
+		result := v.Generator.NextTempReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", result, sym.Location))         // carga valor actual
+		v.Generator.Add(fmt.Sprintf("SUB %s, %s, %s", result, result, rightReg)) // resta
+		v.Generator.Add(fmt.Sprintf("STR %s, %s", result, sym.Location))         // guarda de nuevo
+
+	case "float64":
+		rightF, ok := right.(FloatReg)
+		if !ok {
+			v.Generator.Comment("❌ Incompatibilidad de tipo en -= float64")
+			return nil
+		}
+		left := v.Generator.NextTempFloatReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", left, sym.Location)) // carga valor actual
+		res := v.Generator.NextTempFloatReg()
+		v.Generator.Add(fmt.Sprintf("FSUB %s, %s, %s", res, left, rightF.Reg)) // resta float
+		v.Generator.Add(fmt.Sprintf("STR %s, %s", res, sym.Location))          // guarda de nuevo
+
+	default:
+		v.Generator.Comment("❌ Tipo no soportado en '-='")
 	}
 
 	return nil

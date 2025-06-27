@@ -9,19 +9,19 @@ main:
 # Literal entero: 10
 MOV x1, #10
 STR x1, [SP, #0]
-# Variable x inicializada con valor en x1
-# Literal entero: 5
-MOV x2, #5
+# Variable f inicializada con valor en x1
+# Literal entero: 2
+MOV x2, #2
 LDR x3, [SP, #0]
-ADD x4, x3, x2
-STR x4, [SP, #0]
-# Accediendo variable x
-LDR x1, [SP, #0]
+SUB x3, x3, x2
+STR x3, [SP, #0]
+# Accediendo variable f
+LDR x4, [SP, #0]
 # Print entero
-MOV X0, x1
+MOV X0, x4
 BL print_integer
 # Salto de línea después de println
-ADR x1, .str_0
+ADR x1, .str_3
 MOV X0, x1
 BL print_string
 RET
@@ -227,7 +227,7 @@ print_3digit_integer:
 
 
 .section .data
-.str_0:
+.str_3:
 	.asciz "\n"
 .p2align 2
 dot_char:
