@@ -209,11 +209,16 @@ _start:
 			}
 		}
 
-		// Si se usó print_float, incluir dot_char y float1000
+
+		// Si se usó print_float, incluir dot_char, float1000 y registrar print_3digit_integer
 		if g.StdLib.IsUsed("print_float") {
+			// ⚠️ Forzar inclusión de print_3digit_integer, necesaria en el cuerpo de print_float
+			g.StdLib.Use("print_3digit_integer")
+
 			dataSection += ".p2align 2\ndot_char:\n\t.asciz \".\"\n"
 			dataSection += ".p2align 3\nfloat1000:\n\t.double 1000.0\n"
 		}
+
 	}
 
 	return header + "\n" + textSection + "\n\n" + libFunctions + "\n" + dataSection

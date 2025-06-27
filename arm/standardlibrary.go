@@ -26,6 +26,12 @@ func NewStandardLibrary() *StandardLibrary {
 // Use registra una función como utilizada
 func (s *StandardLibrary) Use(name string) {
 	s.usedFunctions[name] = struct{}{}
+
+	// Manejo automático de dependencias
+	switch name {
+	case "print_float":
+		s.Use("print_3digit_integer")
+	}
 }
 
 // GetFunctionDefinitions retorna el código ensamblador de las funciones utilizadas

@@ -231,6 +231,7 @@ func (v *ArmVisitor) VisitValorCaracter(ctx *parser.ValorCaracterContext) interf
 
 
 
+
 // VisitPrintStatement traduce una instrucción println(...).
 func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) interface{} {
 	fmt.Println("🖨️ VisitPrintStatement ARM")
@@ -243,6 +244,10 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 
 	for i, expr := range exprs {
 		val := v.Visit(expr)
+		if val == nil {
+			v.Generator.Comment("⚠️ Valor nulo, omitiendo impresión")
+			continue
+		}
 
 		switch value := val.(type) {
 		case string:
@@ -256,9 +261,9 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 
 		case FloatReg:
 			v.Generator.Comment("Print float64")
-			v.Generator.StdLib.Use("float1000")            // Para multiplicar decimales
-			v.Generator.StdLib.Use("print_float")           // Lógica principal
-			v.Generator.StdLib.Use("print_3digit_integer")  // NECESARIA para evitar error
+			v.Generator.StdLib.Use("float1000")            // Constante para 3 decimales
+			v.Generator.StdLib.Use("print_float")           // Función principal
+			v.Generator.StdLib.Use("print_3digit_integer")  // Necesaria para los decimales
 			v.Generator.Add(fmt.Sprintf("FMOV D0, %s", value.Reg))
 			v.Generator.Add("BL print_float")
 
@@ -537,32 +542,93 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 }
 
 
-
-
-
-
 func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} {
-    fmt.Println("✖️➗ VisitMultdivmod")
+	fmt.Println("✖️➗ VisitMultdivmod")
 
-    left := v.Visit(ctx.GetChild(0).(antlr.ParseTree)).(string)
-    right := v.Visit(ctx.GetChild(2).(antlr.ParseTree)).(string)
-    result := v.Generator.NextTempReg()
+	left := v.Visit(ctx.GetChild(0).(antlr.ParseTree))
+	right := v.Visit(ctx.GetChild(2).(antlr.ParseTree))
+	op := ctx.GetOp().GetText()
 
-    switch ctx.GetOp().GetText() {
-    case "*":
-        v.Generator.Comment(fmt.Sprintf("Multiplicación: %s * %s", left, right))
-        v.Generator.Add(fmt.Sprintf("MUL %s, %s, %s", result, left, right))
-    case "/":
-        v.Generator.Comment(fmt.Sprintf("División: %s / %s", left, right))
-        v.Generator.Add(fmt.Sprintf("UDIV %s, %s, %s", result, left, right))
-    case "%":
-        v.Generator.Comment(fmt.Sprintf("Módulo: %s %% %s", left, right))
-        // x26 = left - (left / right) * right
-        v.Generator.Add(fmt.Sprintf("UDIV x25, %s, %s", left, right))    // x25 = left / right
-        v.Generator.Add(fmt.Sprintf("MSUB %s, x25, %s, %s", result, right, left)) // result = left - (x25 * right)
-    default:
-        fmt.Println("⚠️ Operador desconocido en multdivmod:", ctx.GetOp().GetText())
-    }
+	switch l := left.(type) {
 
-    return result
+	// 👉 int * int, int / int, int % int, int * float, int / float
+	case string:
+		switch r := right.(type) {
+
+		case string:
+			result := v.Generator.NextTempReg()
+			switch op {
+			case "*":
+				v.Generator.Comment("Multiplicación de enteros")
+				v.Generator.Add(fmt.Sprintf("MUL %s, %s, %s", result, l, r))
+			case "/":
+				v.Generator.Comment("División de enteros")
+				v.Generator.Add(fmt.Sprintf("UDIV %s, %s, %s", result, l, r))
+			case "%":
+				v.Generator.Comment("Módulo de enteros")
+				tmp := v.Generator.NextTempReg()
+				v.Generator.Add(fmt.Sprintf("UDIV %s, %s, %s", tmp, l, r))
+				v.Generator.Add(fmt.Sprintf("MSUB %s, %s, %s, %s", result, tmp, r, l))
+			}
+			return result
+
+		case FloatReg:
+			tmpFloat := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Convierte int a float64")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, l))
+
+			result := v.Generator.NextTempFloatReg()
+			switch op {
+			case "*":
+				v.Generator.Comment("Multiplicación int * float")
+				v.Generator.Add(fmt.Sprintf("FMUL %s, %s, %s", result, tmpFloat, r.Reg))
+			case "/":
+				v.Generator.Comment("División int / float")
+				v.Generator.Add(fmt.Sprintf("FDIV %s, %s, %s", result, tmpFloat, r.Reg))
+			default:
+				v.Generator.Comment("⚠️ Módulo no válido con float")
+			}
+			return FloatReg{Reg: result}
+		}
+
+	// 👉 float * float, float / float, float * int, float / int
+	case FloatReg:
+		switch r := right.(type) {
+
+		case FloatReg:
+			result := v.Generator.NextTempFloatReg()
+			switch op {
+			case "*":
+				v.Generator.Comment("Multiplicación de flotantes")
+				v.Generator.Add(fmt.Sprintf("FMUL %s, %s, %s", result, l.Reg, r.Reg))
+			case "/":
+				v.Generator.Comment("División de flotantes")
+				v.Generator.Add(fmt.Sprintf("FDIV %s, %s, %s", result, l.Reg, r.Reg))
+			default:
+				v.Generator.Comment("⚠️ Módulo no válido con float")
+			}
+			return FloatReg{Reg: result}
+
+		case string:
+			tmpFloat := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Convierte int a float64")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, r))
+
+			result := v.Generator.NextTempFloatReg()
+			switch op {
+			case "*":
+				v.Generator.Comment("Multiplicación float * int")
+				v.Generator.Add(fmt.Sprintf("FMUL %s, %s, %s", result, l.Reg, tmpFloat))
+			case "/":
+				v.Generator.Comment("División float / int")
+				v.Generator.Add(fmt.Sprintf("FDIV %s, %s, %s", result, l.Reg, tmpFloat))
+			default:
+				v.Generator.Comment("⚠️ Módulo no válido con float")
+			}
+			return FloatReg{Reg: result}
+		}
+	}
+
+	fmt.Println("⚠️ Tipos no compatibles en multiplicación/división")
+	return nil
 }
