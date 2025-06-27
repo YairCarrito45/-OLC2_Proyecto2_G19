@@ -10,15 +10,22 @@ import (
 // este objeto se usa desde otro visitor
 type ArmGenerator struct {
 	Instructions []string
-	Variables    map[string]string
+	Variables    map[string]SymbolInfo // ← ahora usa SymbolInfo para tipo + dirección
 	Output       string
 	VarOffset    int
 	StdLib       *StandardLibrary
 
-	tempRegs  []string
-	tempIndex int
-	StringData   map[string]string // ← asegúrate de que esto esté definido
+	tempRegs    []string
+	tempIndex   int
+	StringData  map[string]string
 }
+
+
+type SymbolInfo struct {
+	Location string // Dirección en memoria (e.g. [SP, #8])
+	Type     string // Tipo de dato: "int", "float64", "string", "bool"
+}
+
 
 var stringLabelCounter = 0
 
@@ -82,6 +89,9 @@ func (g *ArmGenerator) EndProgram() {
 	g.Add("MOV X8, 93") // Número de syscall para exit
 	g.Add("SVC #0")     // Realizar syscall
 }
+
+
+
 
 /*
 Funcion para sumar registros

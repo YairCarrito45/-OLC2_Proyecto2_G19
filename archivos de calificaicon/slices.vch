@@ -1,0 +1,129 @@
+fn main() {
+    mut puntos int = 0;
+
+    print("=== Archivo de prueba de slices ===");
+
+    // 1. Creación de slices (6 puntos)
+    print("==== Creación de slices ====");
+    mut puntosCreacion int = 0;
+
+    print("Creación con literales:");
+    numeros = []int{1, 2, 3, 4, 5};
+    print("###Validacion Manual");
+    print("numeros:", numeros);
+    print("OK Creación con literales: correcto");
+    puntosCreacion = puntosCreacion + 6;
+
+    // 2. Acceso de Elementos (6 puntos)
+    print("\n==== Acceso de Elementos ====");
+    mut puntosAcceso int = 0;
+
+    print("Acceso por índice:");
+    mut primerElemento int = numeros[0];
+    print("Primer elemento:", primerElemento);
+
+    if (primerElemento == 1) {
+        puntosAcceso = puntosAcceso + 2;
+        print("OK Acceso por índice: correcto");
+    } else {
+        print("X Acceso por índice: incorrecto");
+    }
+
+    print("\nModificación de elementos:");
+    numeros[0] = 10;
+    print("numeros después de modificar:", numeros);
+
+    if (numeros[0] == 10) {
+        puntosAcceso = puntosAcceso + 4;
+        print("OK Modificación de elementos: correcto");
+    } else {
+        print("X Modificación de elementos: incorrecto");
+    }
+
+    // 3. Función indexOf (1 punto)
+    print("\n==== Función indexOf ====");
+    mut puntosIndex int = 0;
+
+    print("Búsqueda de elementos con indexOf:");
+    numeros = []int{10, 20, 30, 40, 50};
+    mut indice1 int = indexOf(numeros, 30);
+    mut indice2 int = indexOf(numeros, 60); // No existe, debería retornar -1
+    print("Índice de 30:", indice1);
+    print("Índice de 60:", indice2);
+
+    if (indice1 == 2 && indice2 == -1) {
+        puntosIndex = puntosIndex + 1;
+        print("OK indexOf: correcto");
+    } else {
+        print("X indexOf: incorrecto");
+    }
+
+    // 4. Función join (1 punto)
+    print("\n==== Función join ====");
+    mut puntosJoin int = 0;
+
+    print("Unión de strings con join:");
+    palabras = []string{"Hola", "mundo", "desde", "Go"};
+    mut frase string = join(palabras, " ");
+    mut fraseConComas string = join(palabras, ", ");
+    print("Frase con espacios:", frase);
+    print("Frase con comas:", fraseConComas);
+
+    if (frase == "Hola mundo desde Go" && fraseConComas == "Hola, mundo, desde, Go") {
+        puntosJoin = puntosJoin + 1;
+        print("OK join: correcto");
+    } else {
+        print("X join: incorrecto");
+    }
+
+    // 5. Función len (3 puntos)
+    print("\n==== Función len ====");
+    mut puntosLen int = 0;
+
+    print("Longitud de slices con len:");
+    mut longitud1 int = len(numeros);
+    mut longitud2 int = len(palabras);
+    print("Longitud de numeros:", longitud1);
+    print("Longitud de palabras:", longitud2);
+
+    if (longitud1 == 5 && longitud2 == 4) {
+        puntosLen = puntosLen + 3;
+        print("OK len: correcto");
+    } else {
+        print("X len: incorrecto");
+    }
+
+    // 6. Función append (3 puntos)
+    print("\n==== Función append ====");
+    mut puntosAppend int = 0;
+
+    print("Agregar elementos con append:");
+    numeros = []int{1, 2, 3};
+    numeros = append(numeros, 4);
+    print("numeros después de append(numeros, 4):", numeros);
+
+    if (len(numeros) == 4 && numeros[3] == 4) {
+        puntosAppend = puntosAppend + 3;
+        print("OK Agregar un elemento: correcto");
+    } else {
+        print("X Agregar un elemento: incorrecto");
+    }
+
+    // Resumen de puntos
+    puntos = puntosCreacion + puntosAcceso + puntosIndex + puntosJoin +
+        puntosLen + puntosAppend;
+
+    print("\n=== Tabla de Resultados ===");
+    print("+----------------------------------+--------+-------+");
+    print("| Característica                   | Puntos | Total |");
+    print("+----------------------------------+--------+-------+");
+    print("| Creación de slices               | ", puntosCreacion, "    | 6     |");
+    print("| Acceso de Elementos              | ", puntosAcceso, "    | 6     |");
+    print("| Función indexOf                  | ", puntosIndex, "    | 1     |");
+    print("| Función join                     | ", puntosJoin, "    | 1     |");
+    print("| Función len                      | ", puntosLen, "    | 3     |");
+    print("| Función append                   | ", puntosAppend, "    | 3     |");
+    print("+----------------------------------+--------+-------+");
+    print("| TOTAL                            | ", puntos, "   | 20    |");
+    print("+----------------------------------+--------+-------+");
+}

@@ -3,9 +3,6 @@ package arm
 import (
 	parser "compiler/parser"
 	"fmt"
-
-
-
 	"github.com/antlr4-go/antlr/v4"
 )
 
@@ -26,18 +23,25 @@ type ArmVisitor struct {
 // NewArmVisitor construye un nuevo visitor para generación ARM.
 func NewArmVisitor() *ArmVisitor {
 	return &ArmVisitor{
-        Generator: &ArmGenerator{
-            Instructions: []string{},
-            Variables:    make(map[string]string),
-            Output:       "",
-            StdLib:       NewStandardLibrary(),
-            VarOffset:    0,
-            tempRegs:     []string{X1, X2, X3, X4}, // evita X0 (lo usa syscall)
-            tempIndex:    0,
-        },
-
+		Generator: &ArmGenerator{
+			Instructions: []string{},
+			Variables:    make(map[string]SymbolInfo), // <-- ahora con tipo SymbolInfo
+			Output:       "",
+			StdLib:       NewStandardLibrary(),
+			VarOffset:    0,
+			tempRegs:     []string{X1, X2, X3, X4}, // evita X0 (lo usa syscall)
+			tempIndex:    0,
+			StringData:   make(map[string]string), // asegúrate de inicializar esto también
+		},
 	}
 }
+
+
+func (v *ArmVisitor) VisitValorNulo(ctx *parser.ValorNuloContext) interface{} {
+	fmt.Println("🛑 Valor nulo detectado (nil)")
+	return "nil"
+}
+
 
 
 
@@ -209,31 +213,34 @@ func (v *ArmVisitor) VisitValorCaracter(ctx *parser.ValorCaracterContext) interf
 func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) interface{} {
 	fmt.Println("🖨️ VisitPrintStatement ARM")
 
-	if ctx.Parametros() == nil || len(ctx.Parametros().AllExpresion()) == 0 {
+	if ctx.Parametros() == nil {
 		return nil
 	}
 
-	expr := ctx.Parametros().AllExpresion()[0]
-	val := v.Visit(expr)
+	exprs := ctx.Parametros().AllExpresion()
 
-	switch value := val.(type) {
-	case string:
-		v.Generator.Comment("Print entero")
-		PrintInteger(v.Generator, value)
+	for _, expr := range exprs {
+		val := v.Visit(expr)
 
-	case ArmString:
-		v.Generator.Comment("Print cadena")
-		v.Generator.Add(fmt.Sprintf("MOV X0, %s", value.Reg))
-		v.Generator.Add("BL print_string")
+		switch value := val.(type) {
+		case string:
+			v.Generator.Comment("Print entero")
+			PrintInteger(v.Generator, value)
 
-	default:
-		fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
+		case ArmString:
+			v.Generator.Comment("Print cadena")
+			v.Generator.Add(fmt.Sprintf("MOV X0, %s", value.Reg))
+			v.Generator.Add("BL print_string")
+
+		default:
+			fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
+		}
 	}
 
-	// 🔽 Agrega esto al final para salto de línea
+	// Agrega salto de línea al final
 	v.Generator.Comment("Salto de línea después de println")
 	label := v.Generator.GenerateStringLabel()
-	v.Generator.AddData(label, "\n") // añade "\n" como literal
+	v.Generator.AddData(label, "\n")
 	v.Generator.Add(fmt.Sprintf("ADR x1, %s", label))
 	v.Generator.Add("MOV X0, x1")
 	v.Generator.Add("BL print_string")
@@ -311,29 +318,48 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 	varName := ctx.ID().GetText()
 	fmt.Println("🔧 Declarando variable:", varName)
 
-	// Reservamos espacio en la pila
 	offset := v.Generator.VarOffset
 	memLocation := fmt.Sprintf("[SP, #%d]", offset)
 
 	if ctx.Expresion() != nil {
 		val := v.Visit(ctx.Expresion())
-		reg, ok := val.(string)
-		if !ok {
+
+		var reg string
+		var tipo string
+
+		switch value := val.(type) {
+		case string:
+			reg = value
+			tipo = "int" // por defecto, puedes mejorar esto más adelante con análisis semántico
+		case ArmString:
+			reg = value.Reg
+			tipo = "string"
+		default:
 			fmt.Printf("⚠️ Error: expresión no retornó un registro válido para variable '%s'\n", varName)
 			return nil
 		}
 
 		v.Generator.Add(fmt.Sprintf("STR %s, %s", reg, memLocation))
 		v.Generator.Comment(fmt.Sprintf("Variable %s inicializada con valor en %s", varName, reg))
+
+		// Guardar tipo y ubicación
+		v.Generator.Variables[varName] = SymbolInfo{
+			Location: memLocation,
+			Type:     tipo,
+		}
 	} else {
 		v.Generator.Add(fmt.Sprintf("MOV %s, #0", X0))
 		v.Generator.Add(fmt.Sprintf("STR %s, %s", X0, memLocation))
 		v.Generator.Comment(fmt.Sprintf("Variable %s declarada sin valor (inicializada en 0)", varName))
+
+		// Por defecto, tipo int si no tiene valor inicial
+		v.Generator.Variables[varName] = SymbolInfo{
+			Location: memLocation,
+			Type:     "int",
+		}
 	}
 
-	v.Generator.Variables[varName] = memLocation
 	v.Generator.VarOffset += 8
-
 	return nil
 }
 
@@ -342,7 +368,7 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 
 func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
 	varName := ctx.GetText()
-	memLoc, ok := v.Generator.Variables[varName]
+	info, ok := v.Generator.Variables[varName]
 	if !ok {
 		fmt.Printf("⚠️ Variable no encontrada: %s\n", varName)
 		return nil
@@ -350,10 +376,18 @@ func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
 
 	reg := v.Generator.NextTempReg()
 	v.Generator.Comment(fmt.Sprintf("Accediendo variable %s", varName))
-	v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, memLoc)) // cargar a reg temporal
+	v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
 
-	return reg
+	switch info.Type {
+	case "string", "float64", "bool":
+		// Si son valores que se imprimen como cadenas
+		return ArmString{Reg: reg, Label: ""}
+	default:
+		// Enteros, etc.
+		return reg
+	}
 }
+
 
 
 

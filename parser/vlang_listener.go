@@ -229,6 +229,9 @@ type VlangListener interface {
 	// EnterValorCaracter is called when entering the valorCaracter production.
 	EnterValorCaracter(c *ValorCaracterContext)
 
+	// EnterValorNulo is called when entering the valorNulo production.
+	EnterValorNulo(c *ValorNuloContext)
+
 	// ExitPrograma is called when exiting the programa production.
 	ExitPrograma(c *ProgramaContext)
 
@@ -450,4 +453,7 @@ type VlangListener interface {
 
 	// ExitValorCaracter is called when exiting the valorCaracter production.
 	ExitValorCaracter(c *ValorCaracterContext)
+
+	// ExitValorNulo is called when exiting the valorNulo production.
+	ExitValorNulo(c *ValorNuloContext)
 }

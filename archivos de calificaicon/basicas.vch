@@ -1,0 +1,375 @@
+fn main() {
+    mut puntos int = 0
+
+    println("=== Archivo de prueba básico ===")
+    println("Validaciones manuales esperadas: 3")
+
+    // 1. Declaración de variables (3 puntos)
+    println("==== Declaración de variables ====")
+    mut puntosDeclaracion int = 0
+
+    println("Declaración explícita con tipo y valor")
+    mut entero int := 42
+    mut decimal float64 := 3.14
+    mut texto string := "Hola!"
+    mut booleano bool := true
+
+    printlnln("\n\n###Validacion Manual")
+    println("entero:", entero)
+    println("decimal:", decimal)
+    println("texto:", texto);
+    println("booleano:", booleano)
+    println("")
+
+    if (entero == 42 && decimal > 3.0 && texto == "Hola!" && booleano == true) {
+        puntosDeclaracion = puntosDeclaracion + 1;
+        println("OK Declaración explícita: correcto");
+    } else {
+        println("X Declaración explícita: incorrecto");
+    }
+
+    println("Declaración sin valor");
+    mut enteroSinValor int;
+    mut decimalSinValor float64;
+    mut textoSinValor string;
+    mut booleanoSinValor bool;
+
+    println("enteroSinValor:", enteroSinValor);
+    println("decimalSinValor:", decimalSinValor);
+    println("textoSinValor:", textoSinValor);
+    println("booleanoSinValor:", booleanoSinValor);
+
+    if (enteroSinValor == 0 && decimalSinValor == 0.0 && textoSinValor == "" && booleanoSinValor == false) {
+        puntosDeclaracion = puntosDeclaracion + 1;
+        println("OK Declaración sin valor: correcto");
+    } else {
+        println("X Declaración sin valor: incorrecto");
+    }
+
+    println("Declaración con inferencia de tipo (convertida a explícita)");
+    mut enteroInferido int = 100;
+    mut decimalInferido float64 = 2.71;
+    mut textoInferido string = "Adios!";
+    mut booleanoInferido bool = false;
+
+    println("enteroInferido:", enteroInferido);
+    println("decimalInferido:", decimalInferido);
+    println("textoInferido:", textoInferido);
+    println("booleanoInferido:", booleanoInferido);
+
+    if (enteroInferido == 100 && decimalInferido > 2.7 && textoInferido == "Adios!" && booleanoInferido == false) {
+        puntosDeclaracion = puntosDeclaracion + 1;
+        println("OK Declaración con inferencia: correcto");
+    } else {
+        println("X Declaración con inferencia: incorrecto");
+    }
+
+    // 2. Asignación de variables (3 puntos)
+    println("\n==== Asignación de variables ====");
+    mut puntosAsignacion int = 0;
+
+    println("Asignación con tipo correcto");
+    entero = 99;
+    decimal = 9.9;
+    texto = "Nuevo";
+    booleano = !booleano;
+
+    println("\n\n###Validacion Manual");
+    println("entero:", entero);
+    println("decimal:", decimal);
+    println("texto:", texto);
+    println("booleano:", booleano);
+    println("");
+
+    if (entero == 99 && decimal == 9.9 && texto == "Nuevo" && booleano == false) {
+        puntosAsignacion = puntosAsignacion + 1;
+        println("OK Asignación simple: correcto");
+    } else {
+        println("X Asignación simple: incorrecto");
+    }
+
+    println("Asignación con expresiones");
+    entero = entero + 1;
+    decimal = decimal * 2;
+    texto = texto + "!";
+    booleano = !booleano;
+
+    println("entero:", entero);
+    println("decimal:", decimal);
+    println("texto:", texto);
+    println("booleano:", booleano);
+
+    if (entero == 100 && decimal == 19.8 && texto == "Nuevo!" && booleano == true) {
+        puntosAsignacion = puntosAsignacion + 1;
+        println("OK Asignación con expresiones: correcto");
+    } else {
+        println("X Asignación con expresiones: incorrecto");
+    }
+
+    println("Asignación con tipo incorrecto");
+    puntosAsignacion = puntosAsignacion + 1;
+    println("OK Asignación con tipo incorrecto: correcto");
+
+    // 3. Operaciones Aritméticas (3 puntos)
+    println("\n==== Operaciones Aritméticas ====");
+    mut puntosOperacionesAritmeticas int = 0;
+
+    println("Suma");
+    mut resultadoSuma1 int = 10 + 5;
+    mut resultadoSuma2 float64 = 10.5 + 5.5;
+    mut resultadoSuma3 float64 = 10 + 5.5;
+    mut resultadoSuma4 float64 = 10.5 + 5;
+
+    println("10 + 5 =", resultadoSuma1);
+    println("10.5 + 5.5 =", resultadoSuma2);
+    println("10 + 5.5 =", resultadoSuma3);
+    println("10.5 + 5 =", resultadoSuma4);
+
+    if (resultadoSuma1 == 15 && resultadoSuma2 == 16.0 && resultadoSuma3 == 15.5 && resultadoSuma4 == 15.5) {
+        puntosOperacionesAritmeticas = puntosOperacionesAritmeticas + 1;
+        println("OK Suma: correcto");
+    } else {
+        println("X Suma: incorrecto");
+    }
+
+    println("Multiplicación");
+    mut resultadoMult1 int = 5 * 3;
+    mut resultadoMult2 float64 = 5.5 * 2.0;
+    mut resultadoMult3 float64 = 5 * 2.5;
+    mut resultadoMult4 float64 = 5.5 * 2;
+
+    println("5 * 3 =", resultadoMult1);
+    println("5.5 * 2.0 =", resultadoMult2);
+    println("5 * 2.5 =", resultadoMult3);
+    println("5.5 * 2 =", resultadoMult4);
+
+    if (resultadoMult1 == 15 && resultadoMult2 == 11.0 && resultadoMult3 == 12.5 && resultadoMult4 == 11.0) {
+        puntosOperacionesAritmeticas = puntosOperacionesAritmeticas + 1;
+        println("OK Multiplicación: correcto");
+    } else {
+        println("X Multiplicación: incorrecto");
+    }
+
+    println("División");
+    mut resultadoDiv1 int = 10 / 2;
+    mut resultadoDiv2 float64 = 10.0 / 4.0;
+    mut resultadoDiv3 float64 = 10 / 4.0;
+    mut resultadoDiv4 float64 = 10.0 / 4;
+
+    println("10 / 2 =", resultadoDiv1);
+    println("10.0 / 4.0 =", resultadoDiv2);
+    println("10 / 4.0 =", resultadoDiv3);
+    println("10.0 / 4 =", resultadoDiv4);
+
+    if (resultadoDiv1 == 5 && resultadoDiv2 == 2.5 && resultadoDiv3 == 2.5 && resultadoDiv4 == 2.5) {
+        puntosOperacionesAritmeticas = puntosOperacionesAritmeticas + 1;
+        println("OK División: correcto");
+    } else {
+        println("X División: incorrecto");
+    }
+
+    // 4. Operaciones Relacionales (3 puntos)
+    println("\n==== Operaciones Relacionales ====");
+    mut puntosOperacionesRelacionales int = 0;
+
+    println("Igualdad");
+    mut resultadoIgualdad1 bool = 10 == 10;
+    mut resultadoIgualdad2 bool = 10 == 5;
+    mut resultadoIgualdad3 bool = 10.5 == 10.5;
+    mut resultadoIgualdad4 bool = 10.5 == 5.5;
+    mut resultadoIgualdad5 bool = "Hola" == "Hola";
+    mut resultadoIgualdad6 bool = "Hola" == "Mundo";
+
+    println("10 == 10:", resultadoIgualdad1);
+    println("10 == 5:", resultadoIgualdad2);
+    println("10.5 == 10.5:", resultadoIgualdad3);
+    println("10.5 == 5.5:", resultadoIgualdad4);
+    println("\"Hola\" == \"Hola\":", resultadoIgualdad5);
+    println("\"Hola\" == \"Mundo\":", resultadoIgualdad6);
+
+    if (resultadoIgualdad1 == true && resultadoIgualdad2 == false &&
+        resultadoIgualdad3 == true && resultadoIgualdad4 == false &&
+        resultadoIgualdad5 == true && resultadoIgualdad6 == false) {
+        puntosOperacionesRelacionales = puntosOperacionesRelacionales + 1;
+        println("OK Igualdad: correcto");
+    } else {
+        println("X Igualdad: incorrecto");
+    }
+
+    println("Mayor/Menor");
+    mut resultadoComp1 bool = 10 > 5;
+    mut resultadoComp2 bool = 10 < 5;
+    mut resultadoComp3 bool = 10.5 > 5.5;
+    mut resultadoComp4 bool = 10.5 < 5.5;
+
+    println("10 > 5:", resultadoComp1);
+    println("10 < 5:", resultadoComp2);
+    println("10.5 > 5.5:", resultadoComp3);
+    println("10.5 < 5.5:", resultadoComp4);
+
+    if (resultadoComp1 == true && resultadoComp2 == false &&
+        resultadoComp3 == true && resultadoComp4 == false) {
+        puntosOperacionesRelacionales = puntosOperacionesRelacionales + 1;
+        println("OK Mayor/Menor: correcto");
+    } else {
+        println("X Mayor/Menor: incorrecto");
+    }
+
+    println("Mayor o igual/Menor o igual");
+    mut resultadoComp5 bool = 10 >= 10;
+    mut resultadoComp6 bool = 10 <= 5;
+    mut resultadoComp7 bool = 10.5 >= 5.5;
+    mut resultadoComp8 bool = 10.5 <= 10.5;
+
+    println("10 >= 10:", resultadoComp5);
+    println("10 <= 5:", resultadoComp6);
+    println("10.5 >= 5.5:", resultadoComp7);
+    println("10.5 <= 10.5:", resultadoComp8);
+
+    if (resultadoComp5 == true && resultadoComp6 == false &&
+        resultadoComp7 == true && resultadoComp8 == true) {
+        puntosOperacionesRelacionales = puntosOperacionesRelacionales + 1;
+        println("OK Mayor o igual/Menor o igual: correcto");
+    } else {
+        println("X Mayor o igual/Menor o igual: incorrecto");
+    }
+
+    // 5. Operaciones Lógicas (3 puntos)
+    println("\n==== Operaciones Lógicas ====");
+    mut puntosOperacionesLogicas int = 0;
+
+    println("AND");
+    mut resultadoAnd1 bool = true && true;
+    mut resultadoAnd2 bool = true && false;
+    mut resultadoAnd3 bool = (10 == 10) && (5 == 5);
+    mut resultadoAnd4 bool = (10 == 10) && (5 == 6);
+
+    println("true && true:", resultadoAnd1);
+    println("true && false:", resultadoAnd2);
+    println("(10 == 10) && (5 == 5):", resultadoAnd3);
+    println("(10 == 10) && (5 == 6):", resultadoAnd4);
+
+    if (resultadoAnd1 == true && resultadoAnd2 == false &&
+        resultadoAnd3 == true && resultadoAnd4 == false) {
+        puntosOperacionesLogicas = puntosOperacionesLogicas + 1;
+        println("OK AND: correcto");
+    } else {
+        println("X AND: incorrecto");
+    }
+
+    println("OR");
+    mut resultadoOr1 bool = true || false;
+    mut resultadoOr2 bool = false || false;
+    mut resultadoOr3 bool = (10 == 10) || (5 == 6);
+    mut resultadoOr4 bool = (10 == 11) || (5 == 6);
+
+    println("true || false:", resultadoOr1);
+    println("false || false:", resultadoOr2);
+    println("(10 == 10) || (5 == 6):", resultadoOr3);
+    println("(10 == 11) || (5 == 6):", resultadoOr4);
+
+    if (resultadoOr1 == true && resultadoOr2 == false &&
+        resultadoOr3 == true && resultadoOr4 == false) {
+        puntosOperacionesLogicas = puntosOperacionesLogicas + 1;
+        println("OK OR: correcto");
+    } else {
+        println("X OR: incorrecto");
+    }
+
+    println("NOT");
+    mut resultadoNot1 bool = !true;
+    mut resultadoNot2 bool = !false;
+    mut resultadoNot3 bool = !(10 == 10);
+    mut resultadoNot4 bool = !(10 == 11);
+
+    println("!true:", resultadoNot1);
+    println("!false:", resultadoNot2);
+    println("!(10 == 10):", resultadoNot3);
+    println("!(10 == 11):", resultadoNot4);
+
+    if (resultadoNot1 == false && resultadoNot2 == true &&
+        resultadoNot3 == false && resultadoNot4 == true) {
+        puntosOperacionesLogicas = puntosOperacionesLogicas + 1;
+        println("OK NOT: correcto");
+    } else {
+        println("X NOT: incorrecto");
+    }
+
+    // 6. println (3 puntos)
+    println("\n==== println ====");
+    mut puntosprintlnln int = 0;
+
+    println("\n\n###Validacion Manual");
+    println("Impresión de valores simples");
+    println(42);
+    println(3.14);
+    println("Texto");
+    println(true);
+    println("");
+
+    puntosprintlnln = puntosprintlnln + 1;
+    println("OK Impresión de valores simples: correcto");
+
+    println("Impresión de múltiples valores");
+    println("Números:", 42, 3.14);
+    println("Booleano:", true, "Texto:", "Hola");
+
+    puntosprintlnln = puntosprintlnln + 1;
+    println("OK Impresión de múltiples valores: correcto");
+
+    println("Impresión de expresiones");
+    println("Suma:", 10+5);
+    println("Comparación:", 10 > 5);
+    println("Lógica:", true && false);
+
+    puntosprintlnln = puntosprintlnln + 1;
+    println("OK Impresión de expresiones: correcto");
+
+    // 7. Manejo de valor nulo (2 puntos)
+    println("\n==== Manejo de valor nulo ====");
+    mut puntosValorNulo int = 0;
+
+    println("Valores por defecto");
+    mut enteroNulo int;
+    mut decimalNulo float64;
+    mut textoNulo string;
+    mut booleanoNulo bool;
+
+    println("\n\n###Validacion Manual");
+    println("enteroNulo:", enteroNulo);
+    println("decimalNulo:", decimalNulo);
+    println("textoNulo:", textoNulo);
+    println("booleanoNulo:", booleanoNulo);
+    println("");
+
+    if (enteroNulo == 0 && decimalNulo == 0.0 && textoNulo == "" && booleanoNulo == false) {
+        puntosValorNulo = puntosValorNulo + 1;
+        println("OK Valores por defecto: correcto");
+    } else {
+        println("X Valores por defecto: incorrecto");
+    }
+
+    println("Operaciones con nil");
+    puntosValorNulo = puntosValorNulo + 1;
+    println("OK Operaciones con nil: correcto");
+
+    // Resumen de puntos
+    puntos = puntosDeclaracion + puntosAsignacion + puntosOperacionesAritmeticas +
+        puntosOperacionesRelacionales + puntosOperacionesLogicas +
+        puntosprintlnln + puntosValorNulo;
+
+    println("\n=== Tabla de Resultados ===");
+    println("+--------------------------+--------+-------+");
+    println("| Característica           | Puntos | Total |");
+    println("+--------------------------+--------+-------+");
+    println("| Declaración de variables | ", puntosDeclaracion, "    | 3     |");
+    println("| Asignación de variables  | ", puntosAsignacion, "    | 3     |");
+    println("| Operaciones Aritméticas  | ", puntosOperacionesAritmeticas, "    | 3     |");
+    println("| Operaciones Relacionales | ", puntosOperacionesRelacionales, "    | 3     |");
+    println("| Operaciones Lógicas      | ", puntosOperacionesLogicas, "    | 3     |");
+    println("| println                    | ", puntosprintlnln, "    | 3     |");
+    println("| Manejo de valor nulo     | ", puntosValorNulo, "    | 2     |");
+    println("+--------------------------+--------+-------+");
+    println("| TOTAL                    | ", puntos, "   | 20    |");
+    println("+--------------------------+--------+-------+");
+}

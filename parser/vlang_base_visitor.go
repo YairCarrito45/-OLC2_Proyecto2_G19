@@ -302,3 +302,7 @@ func (v *BaseVlangVisitor) VisitValorBooleano(ctx *ValorBooleanoContext) interfa
 func (v *BaseVlangVisitor) VisitValorCaracter(ctx *ValorCaracterContext) interface{} {
 	return v.VisitChildren(ctx)
 }
+
+func (v *BaseVlangVisitor) VisitValorNulo(ctx *ValorNuloContext) interface{} {
+	return v.VisitChildren(ctx)
+}

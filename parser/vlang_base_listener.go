@@ -463,3 +463,9 @@ func (s *BaseVlangListener) EnterValorCaracter(ctx *ValorCaracterContext) {}
 
 // ExitValorCaracter is called when production valorCaracter is exited.
 func (s *BaseVlangListener) ExitValorCaracter(ctx *ValorCaracterContext) {}
+
+// EnterValorNulo is called when production valorNulo is entered.
+func (s *BaseVlangListener) EnterValorNulo(ctx *ValorNuloContext) {}
+
+// ExitValorNulo is called when production valorNulo is exited.
+func (s *BaseVlangListener) ExitValorNulo(ctx *ValorNuloContext) {}

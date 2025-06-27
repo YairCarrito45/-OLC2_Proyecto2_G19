@@ -228,4 +228,7 @@ type VlangVisitor interface {
 
 	// Visit a parse tree produced by VlangParser#valorCaracter.
 	VisitValorCaracter(ctx *ValorCaracterContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#valorNulo.
+	VisitValorNulo(ctx *ValorNuloContext) interface{}
 }

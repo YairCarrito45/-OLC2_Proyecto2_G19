@@ -175,6 +175,7 @@ valor
     | CADENA    #valorCadena
     | BOOLEANO  #valorBooleano
     | CARACTER  #valorCaracter
+    | NIL       #valorNulo 
     ;
 
 // === Palabras clave ===
@@ -209,6 +210,8 @@ ENTERO  : [0-9]+ ;
 DECIMAL : [0-9]+ '.' [0-9]+ ;
 CADENA : '"' (~["\\] | '\\' .)* '"' ;
 CARACTER: '\'' . '\'' ;
+NIL     : 'nil' ;
+
 
 // === Identificadores ===
 ID: [_a-zA-Z][_a-zA-Z0-9]* ;
