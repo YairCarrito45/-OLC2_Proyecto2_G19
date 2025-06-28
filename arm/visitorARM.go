@@ -484,6 +484,9 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 		case FloatReg:
 			reg = value.Reg
 			tipo = "float64"
+		case BoolReg:
+			reg = value.Reg
+			tipo = "bool"
 		default:
 			fmt.Printf("⚠️ Error: expresión no retornó un registro válido para variable '%s'\n", varName)
 			return nil
@@ -890,7 +893,6 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 
 	switch l := left.(type) {
 
-	// Comparación de enteros
 	case string:
 		switch r := right.(type) {
 		case string:
@@ -900,7 +902,7 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 			} else {
 				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
 			}
-			return resultReg
+			return BoolReg{Reg: resultReg}
 
 		case FloatReg:
 			tmpf := v.Generator.NextTempFloatReg()
@@ -912,10 +914,9 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 			} else {
 				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
 			}
-			return resultReg
+			return BoolReg{Reg: resultReg}
 		}
 
-	// Comparación de floats
 	case FloatReg:
 		switch r := right.(type) {
 		case FloatReg:
@@ -925,7 +926,7 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 			} else {
 				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
 			}
-			return resultReg
+			return BoolReg{Reg: resultReg}
 
 		case string:
 			tmpf := v.Generator.NextTempFloatReg()
@@ -937,10 +938,9 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 			} else {
 				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
 			}
-			return resultReg
+			return BoolReg{Reg: resultReg}
 		}
 
-	// Comparación de strings (por dirección de memoria)
 	case ArmString:
 		if r, ok := right.(ArmString); ok {
 			v.Generator.Add(fmt.Sprintf("CMP %s, %s", l.Reg, r.Reg))
@@ -949,10 +949,9 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 			} else {
 				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
 			}
-			return resultReg
+			return BoolReg{Reg: resultReg}
 		}
 
-	// Comparación de booleanos
 	case BoolReg:
 		if r, ok := right.(BoolReg); ok {
 			v.Generator.Add(fmt.Sprintf("CMP %s, %s", l.Reg, r.Reg))
@@ -961,7 +960,7 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 			} else {
 				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
 			}
-			return resultReg
+			return BoolReg{Reg: resultReg}
 		}
 	}
 
@@ -973,12 +972,12 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 
 
 
+
 func (v *ArmVisitor) VisitRelacionales(ctx *parser.RelacionalesContext) interface{} {
 	left := v.Visit(ctx.Expresion(0))
 	right := v.Visit(ctx.Expresion(1))
 	op := ctx.GetOp().GetText()
 
-	// Comparación entre enteros
 	if lreg, ok := left.(string); ok {
 		if rreg, ok2 := right.(string); ok2 {
 			result := v.Generator.NextTempReg()
@@ -1006,18 +1005,16 @@ func (v *ArmVisitor) VisitRelacionales(ctx *parser.RelacionalesContext) interfac
 			v.Generator.Add(fmt.Sprintf("MOV %s, #1", result))
 
 			v.Generator.AddLabel(endLabel)
-			return result
+			return BoolReg{Reg: result}  // ✅ fix aquí
 		}
 	}
 
-	// Comparación entre float64
 	if lf, ok := left.(FloatReg); ok {
 		if rf, ok2 := right.(FloatReg); ok2 {
-			return v.compareFloatRel(op, lf, rf)
+			return v.compareFloatRel(op, lf, rf) // ya debe devolver BoolReg
 		}
 	}
 
-	// int vs float64
 	if lreg, ok := left.(string); ok {
 		if rf, ok2 := right.(FloatReg); ok2 {
 			tmpf := v.Generator.NextTempFloatReg()
@@ -1027,7 +1024,6 @@ func (v *ArmVisitor) VisitRelacionales(ctx *parser.RelacionalesContext) interfac
 		}
 	}
 
-	// float64 vs int
 	if lf, ok := left.(FloatReg); ok {
 		if rreg, ok2 := right.(string); ok2 {
 			tmpf := v.Generator.NextTempFloatReg()
@@ -1040,6 +1036,7 @@ func (v *ArmVisitor) VisitRelacionales(ctx *parser.RelacionalesContext) interfac
 	v.Generator.Comment("❌ Tipos incompatibles en operación relacional")
 	return nil
 }
+
 
 
 func (v *ArmVisitor) compareFloatRel(op string, left FloatReg, right FloatReg) interface{} {
@@ -1068,7 +1065,7 @@ func (v *ArmVisitor) compareFloatRel(op string, left FloatReg, right FloatReg) i
 	v.Generator.Add(fmt.Sprintf("MOV %s, #1", result))
 
 	v.Generator.AddLabel(endLabel)
-	return result
+	return BoolReg{Reg: result}  // ✅ Esto es lo importante
 }
 
 
