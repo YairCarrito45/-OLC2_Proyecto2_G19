@@ -44,6 +44,14 @@ type SymbolInfo struct {
 }
 
 
+func (g *ArmGenerator) EnsureBoolLabels() {
+	if _, ok := g.StringData["true"]; !ok {
+		g.AddData("bool_true", "true")
+	}
+	if _, ok := g.StringData["false"]; !ok {
+		g.AddData("bool_false", "false")
+	}
+}
 
 
 
