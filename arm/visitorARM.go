@@ -13,6 +13,11 @@ type ArmString struct {
     Label string
 }
 
+type BoolReg struct {
+	Reg string
+}
+
+
 type FloatReg struct {
     Reg string // e.g., "v1"
 }
@@ -170,12 +175,15 @@ func (v *ArmVisitor) VisitValorDecimal(ctx *parser.ValorDecimalContext) interfac
 	label := v.Generator.GenerateStringLabel() // Etiqueta única
 	v.Generator.AddDataDouble(label, val)      // Agrega .double a .data
 
+	reg := v.Generator.NextTempFloatReg() // ✅ Usa registro flotante distinto
+
 	v.Generator.Comment(fmt.Sprintf("Carga decimal %f desde memoria", val))
 	v.Generator.Add(fmt.Sprintf("ADR x1, %s", label)) // Dirección a x1
-	v.Generator.Add("LDR d0, [x1]")                   // Carga double desde memoria
+	v.Generator.Add(fmt.Sprintf("LDR %s, [x1]", reg)) // Carga a reg
 
-	return FloatReg{Reg: "d0"}
+	return FloatReg{Reg: reg}
 }
+
 
 
 
@@ -311,6 +319,39 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 			v.Generator.StdLib.Use("print_3digit_integer")  // Necesaria para los decimales
 			v.Generator.Add(fmt.Sprintf("FMOV D0, %s", value.Reg))
 			v.Generator.Add("BL print_float")
+
+		case BoolReg:
+			v.Generator.Comment("Print booleano")
+
+			// Generar etiquetas únicas
+			labelPrefix := v.Generator.GenerateLabel("bool")
+			trueLabel := labelPrefix + "_true"
+			falseLabel := labelPrefix + "_false"
+			endLabel := labelPrefix + "_end"
+
+			// Agregar datos en la sección .data
+			v.Generator.AddData(trueLabel, "true")
+			v.Generator.AddData(falseLabel, "false")
+
+			// Comparar el valor del registro con 1
+			v.Generator.Add(fmt.Sprintf("CMP %s, #1", value.Reg))
+			v.Generator.Add(fmt.Sprintf("BEQ %s", trueLabel))
+			v.Generator.Add(fmt.Sprintf("B %s", falseLabel))
+
+			// true
+			v.Generator.AddLabel(trueLabel)
+			v.Generator.Add(fmt.Sprintf("ADR X0, %s", trueLabel))
+			v.Generator.Add("BL print_string")
+			v.Generator.Add(fmt.Sprintf("B %s", endLabel))
+
+			// false
+			v.Generator.AddLabel(falseLabel)
+			v.Generator.Add(fmt.Sprintf("ADR X0, %s", falseLabel))
+			v.Generator.Add("BL print_string")
+
+			v.Generator.AddLabel(endLabel)
+
+
 
 		default:
 			fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
@@ -488,7 +529,6 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 }
 
 
-
 func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
 	varName := ctx.GetText()
 	info, ok := v.Generator.Variables[varName]
@@ -501,7 +541,6 @@ func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
 
 	switch info.Type {
 	case "float64":
-		// Usa registro flotante
 		reg := v.Generator.NextTempFloatReg()
 		v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
 		return FloatReg{Reg: reg}
@@ -511,13 +550,19 @@ func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
 		v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
 		return ArmString{Reg: reg, Label: ""}
 
+	case "bool":
+		reg := v.Generator.NextTempReg()
+		v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
+		return BoolReg{Reg: reg}
+
 	default:
-		// Asumimos int, bool, etc.
+		// Asumimos int, char, etc.
 		reg := v.Generator.NextTempReg()
 		v.Generator.Add(fmt.Sprintf("LDR %s, %s", reg, info.Location))
 		return reg
 	}
 }
+
 
 
 
@@ -878,3 +923,103 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 	return nil
 }
 
+
+
+
+func (v *ArmVisitor) VisitRelacionales(ctx *parser.RelacionalesContext) interface{} {
+	left := v.Visit(ctx.Expresion(0))
+	right := v.Visit(ctx.Expresion(1))
+	op := ctx.GetOp().GetText()
+
+	// Comparación entre enteros
+	if lreg, ok := left.(string); ok {
+		if rreg, ok2 := right.(string); ok2 {
+			result := v.Generator.NextTempReg()
+			trueLabel := v.Generator.GenerateLabel("rel_true")
+			endLabel := v.Generator.GenerateLabel("rel_end")
+
+			v.Generator.Comment("Comparación relacional entre enteros")
+			v.Generator.Add(fmt.Sprintf("CMP %s, %s", lreg, rreg))
+
+			switch op {
+			case ">":
+				v.Generator.Add(fmt.Sprintf("BGT %s", trueLabel))
+			case "<":
+				v.Generator.Add(fmt.Sprintf("BLT %s", trueLabel))
+			case ">=":
+				v.Generator.Add(fmt.Sprintf("BGE %s", trueLabel))
+			case "<=":
+				v.Generator.Add(fmt.Sprintf("BLE %s", trueLabel))
+			}
+
+			v.Generator.Add(fmt.Sprintf("MOV %s, #0", result))
+			v.Generator.Add(fmt.Sprintf("B %s", endLabel))
+
+			v.Generator.AddLabel(trueLabel)
+			v.Generator.Add(fmt.Sprintf("MOV %s, #1", result))
+
+			v.Generator.AddLabel(endLabel)
+			return result
+		}
+	}
+
+	// Comparación entre float64
+	if lf, ok := left.(FloatReg); ok {
+		if rf, ok2 := right.(FloatReg); ok2 {
+			return v.compareFloatRel(op, lf, rf)
+		}
+	}
+
+	// int vs float64
+	if lreg, ok := left.(string); ok {
+		if rf, ok2 := right.(FloatReg); ok2 {
+			tmpf := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Convirtiendo entero a float64 para comparar")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpf, lreg))
+			return v.compareFloatRel(op, FloatReg{Reg: tmpf}, rf)
+		}
+	}
+
+	// float64 vs int
+	if lf, ok := left.(FloatReg); ok {
+		if rreg, ok2 := right.(string); ok2 {
+			tmpf := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Convirtiendo entero a float64 para comparar")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpf, rreg))
+			return v.compareFloatRel(op, lf, FloatReg{Reg: tmpf})
+		}
+	}
+
+	v.Generator.Comment("❌ Tipos incompatibles en operación relacional")
+	return nil
+}
+
+
+func (v *ArmVisitor) compareFloatRel(op string, lf FloatReg, rf FloatReg) string {
+	result := v.Generator.NextTempReg()
+	trueLabel := v.Generator.GenerateLabel("relf_true")
+	endLabel := v.Generator.GenerateLabel("relf_end")
+
+	v.Generator.Comment("Comparación relacional entre float64")
+	v.Generator.Add(fmt.Sprintf("FCMP %s, %s", lf.Reg, rf.Reg))
+
+	switch op {
+	case ">":
+		v.Generator.Add(fmt.Sprintf("BGT %s", trueLabel)) // ✅ CORRECTO para floats
+	case "<":
+		v.Generator.Add(fmt.Sprintf("BLT %s", trueLabel))
+	case ">=":
+		v.Generator.Add(fmt.Sprintf("BGE %s", trueLabel))
+	case "<=":
+		v.Generator.Add(fmt.Sprintf("BLE %s", trueLabel))
+	}
+
+	v.Generator.Add(fmt.Sprintf("MOV %s, #0", result))
+	v.Generator.Add(fmt.Sprintf("B %s", endLabel))
+
+	v.Generator.AddLabel(trueLabel)
+	v.Generator.Add(fmt.Sprintf("MOV %s, #1", result))
+
+	v.Generator.AddLabel(endLabel)
+	return result
+}

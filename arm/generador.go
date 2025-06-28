@@ -9,20 +9,32 @@ import (
 // llevar la cuenta de las instrucciones
 // este objeto se usa desde otro visitor
 type ArmGenerator struct {
-	Instructions []string
-	Variables    map[string]SymbolInfo // ← ahora usa SymbolInfo para tipo + dirección
-	Output       string
-	VarOffset    int
-	StdLib       *StandardLibrary
+	Instructions   []string
+	Variables      map[string]SymbolInfo
+	Output         string
+	VarOffset      int
+	StdLib         *StandardLibrary
+	tempRegs       []string
+	tempIndex      int
+	tempFloatIndex int
+	StringData     map[string]string
+	DataSection    []string
 
-	tempRegs    []string
-	tempIndex   int
-	StringData  map[string]string
-	DataSection []string
-	tempFloatIndex int // inicializado en 0
-	
+	labelCounter   int
+	stringLabelCounter int
+}
 
 
+// GenerateLabel crea una etiqueta única con un prefijo dado.
+func (gen *ArmGenerator) GenerateLabel(prefix string) string {
+	label := fmt.Sprintf("%s_label_%d", prefix, gen.labelCounter)
+	gen.labelCounter++
+	return label
+}
+
+// AddLabel inserta una etiqueta en la sección de texto
+func (g *ArmGenerator) AddLabel(label string) {
+	g.Instructions = append(g.Instructions, fmt.Sprintf("%s:", label))
 }
 
 
@@ -32,13 +44,15 @@ type SymbolInfo struct {
 }
 
 
-var stringLabelCounter = 0
+
+
 
 func (g *ArmGenerator) GenerateStringLabel() string {
-	label := fmt.Sprintf(".str_%d", stringLabelCounter)
-	stringLabelCounter++
+	label := fmt.Sprintf(".str_%d", g.stringLabelCounter)
+	g.stringLabelCounter++
 	return label
 }
+
 
 func (g *ArmGenerator) AddData(label string, content string) {
 	if g.StringData == nil {
