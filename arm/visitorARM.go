@@ -220,25 +220,22 @@ func (v *ArmVisitor) VisitParentesisexpre(ctx *parser.ParentesisexpreContext) in
 func (v *ArmVisitor) VisitValorBooleano(ctx *parser.ValorBooleanoContext) interface{} {
 	text := ctx.BOOLEANO().GetText() // "true" o "false"
 
-	// Crear etiqueta de string en .data
-	label := v.Generator.GenerateStringLabel()
-	v.Generator.AddData(label, text)
-
-	// Registrar uso de print_string
-	v.Generator.StdLib.Use("print_string")
-
-	// Preparar registro con dirección del string
 	reg := v.Generator.NextTempReg()
-	v.Generator.Comment(fmt.Sprintf("Booleano literal: %s", text))
-	v.Generator.Add(fmt.Sprintf("ADR %s, %s", reg, label))
+	if text == "true" {
+		v.Generator.Comment("Literal booleano: true")
+		v.Generator.Add(fmt.Sprintf("MOV %s, #1", reg))
+	} else {
+		v.Generator.Comment("Literal booleano: false")
+		v.Generator.Add(fmt.Sprintf("MOV %s, #0", reg))
+	}
 
-	return ArmString{Reg: reg, Label: label}
+	return BoolReg{Reg: reg}
 }
+
 
 func (v *ArmVisitor) VisitUnario(ctx *parser.UnarioContext) interface{} {
 	fmt.Println("➖ VisitUnario")
 
-	// Detecta si es negación unaria (-) o not (!)
 	op := ctx.GetOp().GetText()
 	val := v.Visit(ctx.Expresion())
 
@@ -259,8 +256,16 @@ func (v *ArmVisitor) VisitUnario(ctx *parser.UnarioContext) interface{} {
 		}
 
 	case "!":
-		// Si deseas implementar lógica booleana luego
-		v.Generator.Comment("Negación lógica booleana (no implementada)")
+		switch b := val.(type) {
+		case BoolReg:
+			result := v.Generator.NextTempReg()
+			v.Generator.Comment("Negación lógica de booleano (!)")
+			v.Generator.Add(fmt.Sprintf("EOR %s, %s, #1", result, b.Reg))
+			return BoolReg{Reg: result}
+
+		default:
+			v.Generator.Comment("❌ Operando no booleano para negación lógica")
+		}
 	}
 
 	fmt.Println("⚠️ Tipo o operador no compatible en negación unaria:", op)
@@ -325,31 +330,35 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 
 			// Generar etiquetas únicas
 			labelPrefix := v.Generator.GenerateLabel("bool")
-			trueLabel := labelPrefix + "_true"
-			falseLabel := labelPrefix + "_false"
+			trueJump := labelPrefix + "_true_jump"
+			falseJump := labelPrefix + "_false_jump"
 			endLabel := labelPrefix + "_end"
 
+			trueStrLabel := labelPrefix + "_true_str"
+			falseStrLabel := labelPrefix + "_false_str"
+
 			// Agregar datos en la sección .data
-			v.Generator.AddData(trueLabel, "true")
-			v.Generator.AddData(falseLabel, "false")
+			v.Generator.AddData(trueStrLabel, "true")
+			v.Generator.AddData(falseStrLabel, "false")
 
 			// Comparar el valor del registro con 1
 			v.Generator.Add(fmt.Sprintf("CMP %s, #1", value.Reg))
-			v.Generator.Add(fmt.Sprintf("BEQ %s", trueLabel))
-			v.Generator.Add(fmt.Sprintf("B %s", falseLabel))
+			v.Generator.Add(fmt.Sprintf("BEQ %s", trueJump))
+			v.Generator.Add(fmt.Sprintf("B %s", falseJump))
 
 			// true
-			v.Generator.AddLabel(trueLabel)
-			v.Generator.Add(fmt.Sprintf("ADR X0, %s", trueLabel))
+			v.Generator.AddLabel(trueJump)
+			v.Generator.Add(fmt.Sprintf("ADR X0, %s", trueStrLabel))
 			v.Generator.Add("BL print_string")
 			v.Generator.Add(fmt.Sprintf("B %s", endLabel))
 
 			// false
-			v.Generator.AddLabel(falseLabel)
-			v.Generator.Add(fmt.Sprintf("ADR X0, %s", falseLabel))
+			v.Generator.AddLabel(falseJump)
+			v.Generator.Add(fmt.Sprintf("ADR X0, %s", falseStrLabel))
 			v.Generator.Add("BL print_string")
 
 			v.Generator.AddLabel(endLabel)
+
 
 
 
@@ -870,22 +879,34 @@ func (v *ArmVisitor) VisitAsignacionCompuestaResta(ctx *parser.AsignacionCompues
 }
 
 
-
 // visit de operaciones comparativas
 func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 	left := v.Visit(ctx.Expresion(0))
 	right := v.Visit(ctx.Expresion(1))
 	op := ctx.GetOp().GetText() // "==" o "!="
 
-	var resultReg = v.Generator.NextTempReg()
+	resultReg := v.Generator.NextTempReg()
 	v.Generator.Comment(fmt.Sprintf("Comparación %s", op))
 
 	switch l := left.(type) {
 
 	// Comparación de enteros
 	case string:
-		if r, ok := right.(string); ok {
+		switch r := right.(type) {
+		case string:
 			v.Generator.Add(fmt.Sprintf("CMP %s, %s", l, r))
+			if op == "==" {
+				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
+			} else {
+				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
+			}
+			return resultReg
+
+		case FloatReg:
+			tmpf := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Convirtiendo entero a float64 para comparación")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpf, l))
+			v.Generator.Add(fmt.Sprintf("FCMP %s, %s", tmpf, r.Reg))
 			if op == "==" {
 				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
 			} else {
@@ -896,8 +917,21 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 
 	// Comparación de floats
 	case FloatReg:
-		if r, ok := right.(FloatReg); ok {
+		switch r := right.(type) {
+		case FloatReg:
 			v.Generator.Add(fmt.Sprintf("FCMP %s, %s", l.Reg, r.Reg))
+			if op == "==" {
+				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
+			} else {
+				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
+			}
+			return resultReg
+
+		case string:
+			tmpf := v.Generator.NextTempFloatReg()
+			v.Generator.Comment("Convirtiendo entero a float64 para comparación")
+			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpf, r))
+			v.Generator.Add(fmt.Sprintf("FCMP %s, %s", l.Reg, tmpf))
 			if op == "==" {
 				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
 			} else {
@@ -917,11 +951,24 @@ func (v *ArmVisitor) VisitIgualdad(ctx *parser.IgualdadContext) interface{} {
 			}
 			return resultReg
 		}
+
+	// Comparación de booleanos
+	case BoolReg:
+		if r, ok := right.(BoolReg); ok {
+			v.Generator.Add(fmt.Sprintf("CMP %s, %s", l.Reg, r.Reg))
+			if op == "==" {
+				v.Generator.Add(fmt.Sprintf("CSET %s, EQ", resultReg))
+			} else {
+				v.Generator.Add(fmt.Sprintf("CSET %s, NE", resultReg))
+			}
+			return resultReg
+		}
 	}
 
 	v.Generator.Comment("❌ Tipos incompatibles en comparación")
 	return nil
 }
+
 
 
 
@@ -995,17 +1042,17 @@ func (v *ArmVisitor) VisitRelacionales(ctx *parser.RelacionalesContext) interfac
 }
 
 
-func (v *ArmVisitor) compareFloatRel(op string, lf FloatReg, rf FloatReg) string {
+func (v *ArmVisitor) compareFloatRel(op string, left FloatReg, right FloatReg) interface{} {
 	result := v.Generator.NextTempReg()
 	trueLabel := v.Generator.GenerateLabel("relf_true")
 	endLabel := v.Generator.GenerateLabel("relf_end")
 
 	v.Generator.Comment("Comparación relacional entre float64")
-	v.Generator.Add(fmt.Sprintf("FCMP %s, %s", lf.Reg, rf.Reg))
+	v.Generator.Add(fmt.Sprintf("FCMP %s, %s", left.Reg, right.Reg))
 
 	switch op {
 	case ">":
-		v.Generator.Add(fmt.Sprintf("BGT %s", trueLabel)) // ✅ CORRECTO para floats
+		v.Generator.Add(fmt.Sprintf("BGT %s", trueLabel))
 	case "<":
 		v.Generator.Add(fmt.Sprintf("BLT %s", trueLabel))
 	case ">=":
@@ -1022,4 +1069,46 @@ func (v *ArmVisitor) compareFloatRel(op string, lf FloatReg, rf FloatReg) string
 
 	v.Generator.AddLabel(endLabel)
 	return result
+}
+
+
+
+// visitor operaciones logicas
+
+func (v *ArmVisitor) VisitAndExpr(ctx *parser.AndExprContext) interface{} {
+	left := v.Visit(ctx.Expresion(0))
+	right := v.Visit(ctx.Expresion(1))
+
+	lb, lok := left.(BoolReg)
+	rb, rok := right.(BoolReg)
+	if !lok || !rok {
+		v.Generator.Comment("❌ Operadores no booleanos para &&")
+		return nil
+	}
+
+	result := v.Generator.NextTempReg()
+	v.Generator.Comment("Operador lógico AND (&&)")
+	v.Generator.Add(fmt.Sprintf("AND %s, %s, %s", result, lb.Reg, rb.Reg))
+
+	return BoolReg{Reg: result}
+}
+
+
+
+func (v *ArmVisitor) VisitOrExpr(ctx *parser.OrExprContext) interface{} {
+	left := v.Visit(ctx.Expresion(0))
+	right := v.Visit(ctx.Expresion(1))
+
+	lb, lok := left.(BoolReg)
+	rb, rok := right.(BoolReg)
+	if !lok || !rok {
+		v.Generator.Comment("❌ Operadores no booleanos para ||")
+		return nil
+	}
+
+	result := v.Generator.NextTempReg()
+	v.Generator.Comment("Operador lógico OR (||)")
+	v.Generator.Add(fmt.Sprintf("ORR %s, %s, %s", result, lb.Reg, rb.Reg))
+
+	return BoolReg{Reg: result}
 }

@@ -6,54 +6,58 @@ _start:
     svc #0
 
 main:
-# Literal entero: 5
-MOV x1, #5
-# Literal entero: 3
-MOV x2, #3
-# Comparación relacional entre enteros
-CMP x1, x2
-BGT rel_true_label_0
+# Carga decimal 13.000000 desde memoria
+ADR x1, .str_0
+LDR d0, [x1]
+# Carga decimal 13.000000 desde memoria
+ADR x1, .str_1
+LDR d1, [x1]
+# Comparación relacional entre float64
+FCMP d0, d1
+BGE relf_true_label_0
+MOV x1, #0
+B relf_end_label_1
+relf_true_label_0:
+MOV x1, #1
+relf_end_label_1:
+# Print entero
+MOV X0, x1
+BL print_integer
+# Salto de línea después de println
+ADR x1, .str_2
+MOV X0, x1
+BL print_string
+# Literal entero: 65
+MOV x2, #65
+# Carga decimal 70.700000 desde memoria
+ADR x1, .str_3
+LDR d2, [x1]
+# Convirtiendo entero a float64 para comparar
+SCVTF d3, x2
+# Comparación relacional entre float64
+FCMP d3, d2
+BGE relf_true_label_2
 MOV x3, #0
-B rel_end_label_1
-rel_true_label_0:
+B relf_end_label_3
+relf_true_label_2:
 MOV x3, #1
-rel_end_label_1:
+relf_end_label_3:
 # Print entero
 MOV X0, x3
 BL print_integer
 # Salto de línea después de println
-ADR x1, .str_0
-MOV X0, x1
-BL print_string
-# Carga decimal 2.500000 desde memoria
-ADR x1, .str_1
-LDR d0, [x1]
-# Carga decimal 1.000000 desde memoria
-ADR x1, .str_2
-LDR d1, [x1]
-# Comparación relacional entre float64
-FCMP d0, d1
-BLT relf_true_label_2
-MOV x4, #0
-B relf_end_label_3
-relf_true_label_2:
-MOV x4, #1
-relf_end_label_3:
-# Print entero
-MOV X0, x4
-BL print_integer
-# Salto de línea después de println
-ADR x1, .str_3
-MOV X0, x1
-BL print_string
-# Carga decimal 3.140000 desde memoria
 ADR x1, .str_4
-LDR d2, [x1]
-# Carga decimal 3.140000 desde memoria
+MOV X0, x1
+BL print_string
+# Carga decimal 40.600000 desde memoria
 ADR x1, .str_5
-LDR d3, [x1]
+LDR d4, [x1]
+# Literal entero: 30
+MOV x4, #30
+# Convirtiendo entero a float64 para comparar
+SCVTF d5, x4
 # Comparación relacional entre float64
-FCMP d2, d3
+FCMP d4, d5
 BGE relf_true_label_4
 MOV x1, #0
 B relf_end_label_5
@@ -65,47 +69,6 @@ MOV X0, x1
 BL print_integer
 # Salto de línea después de println
 ADR x1, .str_6
-MOV X0, x1
-BL print_string
-# Literal entero: 10
-MOV x2, #10
-# Literal entero: 20
-MOV x3, #20
-# Comparación relacional entre enteros
-CMP x2, x3
-BLE rel_true_label_6
-MOV x4, #0
-B rel_end_label_7
-rel_true_label_6:
-MOV x4, #1
-rel_end_label_7:
-# Print entero
-MOV X0, x4
-BL print_integer
-# Salto de línea después de println
-ADR x1, .str_7
-MOV X0, x1
-BL print_string
-# Carga decimal 1.100000 desde memoria
-ADR x1, .str_8
-LDR d4, [x1]
-# Literal entero: 2
-MOV x1, #2
-# Convirtiendo entero a float64 para comparar
-SCVTF d5, x1
-# Comparación relacional entre float64
-FCMP d4, d5
-BGT relf_true_label_8
-MOV x2, #0
-B relf_end_label_9
-relf_true_label_8:
-MOV x2, #1
-relf_end_label_9:
-# Print entero
-MOV X0, x2
-BL print_integer
-# Salto de línea después de println
-ADR x1, .str_9
 MOV X0, x1
 BL print_string
 RET
@@ -311,32 +274,25 @@ got_length:
     ret
 
 .section .data
-.str_3:
+.str_4:
 	.asciz "\n"
 .str_6:
 	.asciz "\n"
-.str_7:
-	.asciz "\n"
-.str_9:
-	.asciz "\n"
-.str_0:
+.str_2:
 	.asciz "\n"
 .p2align 3
+.p2align 3
+.str_0:
+    .double 13.000000
 .p2align 3
 .str_1:
-    .double 2.500000
+    .double 13.000000
 .p2align 3
-.str_2:
-    .double 1.000000
-.p2align 3
-.str_4:
-    .double 3.140000
+.str_3:
+    .double 70.700000
 .p2align 3
 .str_5:
-    .double 3.140000
-.p2align 3
-.str_8:
-    .double 1.100000
+    .double 40.600000
 .p2align 2
 dot_char:
 	.asciz "."
