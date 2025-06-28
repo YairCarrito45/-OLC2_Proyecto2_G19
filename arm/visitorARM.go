@@ -4,6 +4,7 @@ import (
 	parser "compiler/parser"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
 )
@@ -12,6 +13,8 @@ type ArmString struct {
     Reg   string
     Label string
 }
+
+type NilValue struct{}
 
 type BoolReg struct {
 	Reg string
@@ -60,10 +63,8 @@ func NewArmVisitor() *ArmVisitor {
 
 func (v *ArmVisitor) VisitValorNulo(ctx *parser.ValorNuloContext) interface{} {
 	fmt.Println("🛑 Valor nulo detectado (nil)")
-	return "nil"
+	return NilValue{}
 }
-
-
 
 
 
@@ -319,48 +320,45 @@ func (v *ArmVisitor) VisitPrintStatement(ctx *parser.PrintStatementContext) inte
 
 		case FloatReg:
 			v.Generator.Comment("Print float64")
-			v.Generator.StdLib.Use("float1000")            // Constante para 3 decimales
-			v.Generator.StdLib.Use("print_float")           // Función principal
-			v.Generator.StdLib.Use("print_3digit_integer")  // Necesaria para los decimales
+			v.Generator.StdLib.Use("float1000")
+			v.Generator.StdLib.Use("print_float")
+			v.Generator.StdLib.Use("print_3digit_integer")
 			v.Generator.Add(fmt.Sprintf("FMOV D0, %s", value.Reg))
 			v.Generator.Add("BL print_float")
 
 		case BoolReg:
 			v.Generator.Comment("Print booleano")
 
-			// Generar etiquetas únicas
 			labelPrefix := v.Generator.GenerateLabel("bool")
 			trueJump := labelPrefix + "_true_jump"
 			falseJump := labelPrefix + "_false_jump"
 			endLabel := labelPrefix + "_end"
-
 			trueStrLabel := labelPrefix + "_true_str"
 			falseStrLabel := labelPrefix + "_false_str"
 
-			// Agregar datos en la sección .data
 			v.Generator.AddData(trueStrLabel, "true")
 			v.Generator.AddData(falseStrLabel, "false")
-
-			// Comparar el valor del registro con 1
 			v.Generator.Add(fmt.Sprintf("CMP %s, #1", value.Reg))
 			v.Generator.Add(fmt.Sprintf("BEQ %s", trueJump))
 			v.Generator.Add(fmt.Sprintf("B %s", falseJump))
 
-			// true
 			v.Generator.AddLabel(trueJump)
 			v.Generator.Add(fmt.Sprintf("ADR X0, %s", trueStrLabel))
 			v.Generator.Add("BL print_string")
 			v.Generator.Add(fmt.Sprintf("B %s", endLabel))
 
-			// false
 			v.Generator.AddLabel(falseJump)
 			v.Generator.Add(fmt.Sprintf("ADR X0, %s", falseStrLabel))
 			v.Generator.Add("BL print_string")
 
 			v.Generator.AddLabel(endLabel)
 
-
-
+		case NilValue:
+			v.Generator.Comment("Print nil")
+			nilLabel := v.Generator.GenerateStringLabel()
+			v.Generator.AddData(nilLabel, "nil")
+			v.Generator.Add(fmt.Sprintf("ADR X0, %s", nilLabel))
+			v.Generator.Add("BL print_string")
 
 		default:
 			fmt.Println("⚠️ No se pudo imprimir, tipo no reconocido:", fmt.Sprintf("%T", val))
@@ -461,6 +459,13 @@ func (v *ArmVisitor) VisitReturnStatement(ctx *parser.ReturnStatementContext) in
 }
 
 
+
+// Helper para detectar tipos que permiten nil
+func esReferencial(tipo string) bool {
+	return tipo == "string" || strings.HasPrefix(tipo, "[]") || strings.HasPrefix(tipo, "*") || strings.HasPrefix(tipo, "struct")
+}
+
+// VisitVariableDeclaration con soporte para nil
 func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationContext) interface{} {
 	varName := ctx.ID().GetText()
 	fmt.Println("🔧 Declarando variable:", varName)
@@ -478,15 +483,32 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 		case string:
 			reg = value
 			tipo = "int"
+
 		case ArmString:
 			reg = value.Reg
 			tipo = "string"
+
 		case FloatReg:
 			reg = value.Reg
 			tipo = "float64"
+
 		case BoolReg:
 			reg = value.Reg
 			tipo = "bool"
+
+		case NilValue:
+			if ctx.Tipo() == nil {
+				fmt.Printf("❌ Error semántico: no se puede asignar 'nil' sin tipo explícito a '%s'\n", varName)
+				return nil
+			}
+			tipo = ctx.Tipo().GetText()
+			if !esReferencial(tipo) {
+				fmt.Printf("❌ Error semántico: el tipo '%s' de '%s' no puede contener nil\n", tipo, varName)
+				return nil
+			}
+			reg = XZR // registro cero representa valor nulo (0)
+			v.Generator.Comment(fmt.Sprintf("Variable %s inicializada como nil (%s)", varName, tipo))
+
 		default:
 			fmt.Printf("⚠️ Error: expresión no retornó un registro válido para variable '%s'\n", varName)
 			return nil
@@ -500,6 +522,7 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 			Type:     tipo,
 		}
 	} else {
+		// Declaración sin expresión (inicialización por defecto)
 		var tipo string
 		if ctx.Tipo() != nil {
 			tipoTexto := ctx.Tipo().GetText()
@@ -518,6 +541,7 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 				v.Generator.AddData(label, "")
 				v.Generator.Add(fmt.Sprintf("ADR x1, %s", label))
 				v.Generator.Add(fmt.Sprintf("STR x1, %s", memLocation))
+
 			default:
 				tipo = "int"
 				v.Generator.Add(fmt.Sprintf("MOV %s, #0", X0))
@@ -539,6 +563,7 @@ func (v *ArmVisitor) VisitVariableDeclaration(ctx *parser.VariableDeclarationCon
 	v.Generator.VarOffset += 8
 	return nil
 }
+
 
 
 func (v *ArmVisitor) VisitId(ctx *parser.IdContext) interface{} {
@@ -598,13 +623,22 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 	right := v.Visit(ctx.Expresion(1))
 	op := ctx.GetOp().GetText()
 
-	switch l := left.(type) {
+	// 🚨 Validación de nil
+	if _, ok := left.(NilValue); ok {
+		v.Generator.Comment("❌ Error: operando izquierdo es nil en suma/resta")
+		fmt.Println("❌ Error semántico: no se puede usar 'nil' en suma o resta")
+		return nil
+	}
+	if _, ok := right.(NilValue); ok {
+		v.Generator.Comment("❌ Error: operando derecho es nil en suma/resta")
+		fmt.Println("❌ Error semántico: no se puede usar 'nil' en suma o resta")
+		return nil
+	}
 
-	// int + int o int - int
+	switch l := left.(type) {
 	case string:
 		switch r := right.(type) {
 		case string:
-			fmt.Printf("🧮 %s %s %s (int)\n", l, op, r)
 			result := v.Generator.NextTempReg()
 			if op == "+" {
 				v.Generator.Comment("Suma de enteros")
@@ -616,13 +650,10 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 			return result
 
 		case FloatReg:
-			fmt.Printf("🧮 %s %s %s (int y float)\n", l, op, r.Reg)
 			tmpFloat := v.Generator.NextTempFloatReg()
 			v.Generator.Comment("Convierte int a float64")
 			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, l))
-
 			result := v.Generator.NextTempFloatReg()
-			v.Generator.Comment("Suma/Resta int y float")
 			if op == "+" {
 				v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, tmpFloat, r.Reg))
 			} else {
@@ -631,28 +662,24 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 			return FloatReg{Reg: result}
 		}
 
-	// float + int, float + float, float - int, float - float
 	case FloatReg:
 		switch r := right.(type) {
 		case FloatReg:
-			fmt.Printf("🧮 %s %s %s (float)\n", l.Reg, op, r.Reg)
 			result := v.Generator.NextTempFloatReg()
-			v.Generator.Comment("Suma/Resta de float64")
 			if op == "+" {
+				v.Generator.Comment("Suma de float64")
 				v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, l.Reg, r.Reg))
 			} else {
+				v.Generator.Comment("Resta de float64")
 				v.Generator.Add(fmt.Sprintf("FSUB %s, %s, %s", result, l.Reg, r.Reg))
 			}
 			return FloatReg{Reg: result}
 
 		case string:
-			fmt.Printf("🧮 %s %s %s (float y int)\n", l.Reg, op, r)
 			tmpFloat := v.Generator.NextTempFloatReg()
 			v.Generator.Comment("Convierte int a float64")
 			v.Generator.Add(fmt.Sprintf("SCVTF %s, %s", tmpFloat, r))
-
 			result := v.Generator.NextTempFloatReg()
-			v.Generator.Comment("Suma/Resta float y int")
 			if op == "+" {
 				v.Generator.Add(fmt.Sprintf("FADD %s, %s, %s", result, l.Reg, tmpFloat))
 			} else {
@@ -661,28 +688,24 @@ func (v *ArmVisitor) VisitSumres(ctx *parser.SumresContext) interface{} {
 			return FloatReg{Reg: result}
 		}
 
-	// string + string (concatenación)
 	case ArmString:
 		if r, ok := right.(ArmString); ok && op == "+" {
-			fmt.Printf("🧮 \"%s\" + \"%s\" (concatenación)\n", l.Label, r.Label)
 			leftContent := v.Generator.StringData[l.Label]
 			rightContent := v.Generator.StringData[r.Label]
 			content := leftContent + rightContent
 
 			label := v.Generator.GenerateStringLabel()
 			v.Generator.AddData(label, content)
-
 			reg := v.Generator.NextTempReg()
 			v.Generator.Add(fmt.Sprintf("ADR %s, %s", reg, label))
-
 			return ArmString{Reg: reg, Label: label}
 		}
 	}
 
-	// ⚠️ Caso no soportado
 	fmt.Printf("⚠️ Tipos no soportados para suma o resta: %T %s %T\n", left, op, right)
 	return nil
 }
+
 
 
 func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} {
@@ -692,12 +715,22 @@ func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} 
 	right := v.Visit(ctx.GetChild(2).(antlr.ParseTree))
 	op := ctx.GetOp().GetText()
 
-	switch l := left.(type) {
+	// 🔒 Validar que no se opere con nil
+	if _, ok := left.(NilValue); ok {
+		v.Generator.Comment("❌ Error: operando izquierdo es nil en operación mult/div/mod")
+		fmt.Println("❌ Error semántico: operando izquierdo es nil en operación mult/div/mod")
+		return nil
+	}
+	if _, ok := right.(NilValue); ok {
+		v.Generator.Comment("❌ Error: operando derecho es nil en operación mult/div/mod")
+		fmt.Println("❌ Error semántico: operando derecho es nil en operación mult/div/mod")
+		return nil
+	}
 
 	// 👉 int * int, int / int, int % int, int * float, int / float
+	switch l := left.(type) {
 	case string:
 		switch r := right.(type) {
-
 		case string:
 			result := v.Generator.NextTempReg()
 			switch op {
@@ -733,20 +766,20 @@ func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} 
 			}
 			return FloatReg{Reg: result}
 		}
+	}
 
 	// 👉 float * float, float / float, float * int, float / int
-	case FloatReg:
+	if lf, ok := left.(FloatReg); ok {
 		switch r := right.(type) {
-
 		case FloatReg:
 			result := v.Generator.NextTempFloatReg()
 			switch op {
 			case "*":
 				v.Generator.Comment("Multiplicación de flotantes")
-				v.Generator.Add(fmt.Sprintf("FMUL %s, %s, %s", result, l.Reg, r.Reg))
+				v.Generator.Add(fmt.Sprintf("FMUL %s, %s, %s", result, lf.Reg, r.Reg))
 			case "/":
 				v.Generator.Comment("División de flotantes")
-				v.Generator.Add(fmt.Sprintf("FDIV %s, %s, %s", result, l.Reg, r.Reg))
+				v.Generator.Add(fmt.Sprintf("FDIV %s, %s, %s", result, lf.Reg, r.Reg))
 			default:
 				v.Generator.Comment("⚠️ Módulo no válido con float")
 			}
@@ -761,10 +794,10 @@ func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} 
 			switch op {
 			case "*":
 				v.Generator.Comment("Multiplicación float * int")
-				v.Generator.Add(fmt.Sprintf("FMUL %s, %s, %s", result, l.Reg, tmpFloat))
+				v.Generator.Add(fmt.Sprintf("FMUL %s, %s, %s", result, lf.Reg, tmpFloat))
 			case "/":
 				v.Generator.Comment("División float / int")
-				v.Generator.Add(fmt.Sprintf("FDIV %s, %s, %s", result, l.Reg, tmpFloat))
+				v.Generator.Add(fmt.Sprintf("FDIV %s, %s, %s", result, lf.Reg, tmpFloat))
 			default:
 				v.Generator.Comment("⚠️ Módulo no válido con float")
 			}
@@ -772,9 +805,11 @@ func (v *ArmVisitor) VisitMultdivmod(ctx *parser.MultdivmodContext) interface{} 
 		}
 	}
 
+	v.Generator.Comment("❌ Tipos incompatibles en operación mult/div/mod")
 	fmt.Println("⚠️ Tipos no compatibles en multiplicación/división")
 	return nil
 }
+
 
 
 
